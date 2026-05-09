@@ -2,6 +2,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const registerSocketHandlers = require('./events/socketHandlers');
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,14 +22,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Socket.io connections
-io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
-
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
-  });
-});
+// Register Socket.io event handlers
+registerSocketHandlers(io);
 
 // Start server
 const PORT = process.env.PORT || 3001;
