@@ -1,0 +1,25 @@
+{
+  "name": "reversigame-server",
+  "version": "1.0.0",
+  "description": "Reversi game server",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js",
+    "start": "node index.js"
+  },
+  "keywords": [
+    "reversi",
+    "server",
+    "socket.io"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "4.18.2",
+    "socket.io": "4.7.2",
+    "cors": "2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "3.0.1"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "reversigame",
+  "version": "1.0.0",
+  "description": "A real-time multiplayer Reversi game using Next.js and Express with Socket.io",
+  "private": true,
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "npm run build && npm run dev:server"
+  },
+  "keywords": [
+    "reversi",
+    "othello",
+    "game",
+    "multiplayer",
+    "real-time"
+  ],
+  "author": "",
+  "license": "MIT"
+}
