@@ -17,6 +17,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   min-height: 100vh;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+
+/* モバイルキーボード対応 */
+input[type="text"] {
+  font-size: 16px; /* iOSでズーム防止 */
+}
+
+input {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+}
+
+button {
+  touch-action: manipulation;
 }
 
 /* Animations */
