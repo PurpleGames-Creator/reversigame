@@ -1,7 +1,20 @@
+import { useEffect } from 'react';
 import Head from 'next/head';
 import '../styles/globals.css';
+import io from 'socket.io-client';
+
+let globalSocket = null;
 
 function MyApp({ Component, pageProps }) {
+  useEffect(() => {
+    if (!globalSocket) {
+      globalSocket = io('https://purple-reversi.up.railway.app', {
+        reconnection: true,
+      });
+      window.__socket = globalSocket;
+    }
+  }, []);
+
   return (
     <>
       <Head>
