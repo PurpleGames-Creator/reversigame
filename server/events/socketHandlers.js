@@ -143,6 +143,9 @@ function registerSocketHandlers(io) {
         const legalMoves = getLegalMoves(room.game);
         io.to(roomId).emit('legal-moves-updated', { legalMoves });
 
+        // ゲーム開始時にターンを開始
+        room.game.startTurn();
+
         // Emit rooms-updated to all clients
         emitRoomsUpdated(io, roomManager);
 
@@ -181,12 +184,20 @@ function registerSocketHandlers(io) {
 
         console.log(`Move made in room ${roomId} at [${row}, ${col}]`);
 
+        // Clear timeout for current player and start new timeout for next player
+        room.game.clearTurnTimeout();
+
         // Emit board-updated to room
         io.to(roomId).emit('board-updated', gameState);
 
         // Get legal moves for next player and emit
         const legalMoves = getLegalMoves(room.game);
         io.to(roomId).emit('legal-moves-updated', { legalMoves });
+
+        // Start turn for next player
+        if (!room.game.isFinished) {
+          room.game.startTurn();
+        }
 
         // Check if game is finished
         if (room.game.isFinished) {

@@ -6,7 +6,12 @@
  * - Player turns (black and white)
  * - Move validation and piece flipping
  * - Game status and winner determination
+ * - Turn timeout and auto-move functionality
  */
+
+// Timeout configuration (20 seconds)
+const TURN_TIME_LIMIT = 20000;
+
 class ReversiGame {
   constructor(host, guest) {
     this.host = host;
@@ -24,6 +29,10 @@ class ReversiGame {
     this.status = 'playing';
     this.winner = null;
     this.isFinished = false;
+
+    // Timeout management
+    this.turnStartTime = null;
+    this.turnTimeoutId = null;
   }
 
   /**
@@ -318,6 +327,55 @@ class ReversiGame {
       blackPlayer: this.blackPlayer,
       whitePlayer: this.whitePlayer
     };
+  }
+
+  /**
+   * Start turn timer - schedules auto-move after TURN_TIME_LIMIT
+   * Saves the start time and sets up a timeout
+   */
+  startTurn() {
+    this.turnStartTime = Date.now();
+    const turnTime = TURN_TIME_LIMIT;
+    this.turnTimeoutId = setTimeout(() => {
+      this.autoMove();
+    }, turnTime);
+  }
+
+  /**
+   * Clear turn timeout - prevents auto-move if player makes a move in time
+   * Called when player successfully places a piece
+   */
+  clearTurnTimeout() {
+    if (this.turnTimeoutId) {
+      clearTimeout(this.turnTimeoutId);
+      this.turnTimeoutId = null;
+    }
+  }
+
+  /**
+   * Auto-move - automatically place a random legal move or pass turn
+   * Called when turn timer expires
+   */
+  autoMove() {
+    // Get legal moves for current player
+    const legalMoves = this.getLegalMoves();
+
+    if (legalMoves.length > 0) {
+      // Pick random move
+      const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+      // Make the move
+      this.move(randomMove[0], randomMove[1]);
+    } else {
+      // No legal moves - auto-pass by toggling current player
+      this.currentPlayer = this.currentPlayer === 'black' ? 'white' : 'black';
+      // Check if game is finished after pass
+      this.checkGameStatus();
+    }
+
+    // Start turn for next player (auto-move does not call clearTurnTimeout before passing)
+    if (!this.isFinished) {
+      this.startTurn();
+    }
   }
 }
 
