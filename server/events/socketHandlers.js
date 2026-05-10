@@ -64,10 +64,13 @@ function registerSocketHandlers(io) {
           player2: room.guest ? room.guest.name : 'Waiting...'
         }));
 
+        const onlineCount = playerNames.size;
+
         if (callback) {
           callback({
-            waitingRooms,
-            playingRooms
+            waiting: waitingRooms,
+            playing: playingRooms,
+            onlineCount
           });
         }
       } catch (error) {

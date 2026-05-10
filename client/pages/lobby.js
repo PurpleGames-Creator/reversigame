@@ -75,8 +75,16 @@ export default function LobbyPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* ヘッダー */}
-      <header className="sticky top-0 z-10 bg-blue-600 text-white text-center py-4 px-4 shadow-sm">
-        <h1 className="text-xl font-bold">{onlineCount}人待機中</h1>
+      <header className="sticky top-0 z-10 bg-blue-600 text-white py-4 px-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => router.push('/')}
+            className="text-2xl font-black text-white hover:opacity-80 transition-opacity cursor-pointer select-none"
+          >
+            Purple リバーシ
+          </button>
+          <h1 className="text-lg font-bold">{onlineCount}人待機中</h1>
+        </div>
       </header>
 
       {/* コンテンツエリア */}
