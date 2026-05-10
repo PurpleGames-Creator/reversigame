@@ -48,7 +48,18 @@ export default function Board({ board, legalMoves, lastMove, onCellClick }) {
               >
                 {/* Piece */}
                 {piece !== PIECE_EMPTY && (
-                  <div className={`absolute inset-2 rounded-full ${COLORS[piece]}`} />
+                  <div
+                    className={`
+                      absolute inset-2 rounded-full shadow-lg
+                      ${piece === PIECE_WHITE ? 'bg-white' : 'bg-gradient-to-br from-purple-500 via-purple-600 to-purple-700'}
+                      ${isLast ? 'piece-flip' : 'piece-fade-in'}
+                    `}
+                    style={{
+                      boxShadow: piece === PIECE_WHITE
+                        ? '0 4px 8px rgba(0,0,0,0.2), inset -2px -2px 4px rgba(0,0,0,0.1)'
+                        : '0 4px 8px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(0,0,0,0.2)'
+                    }}
+                  />
                 )}
 
                 {/* Last move indicator (red dot if piece placed) */}
