@@ -8,7 +8,9 @@ let globalSocket = null;
 function MyApp({ Component, pageProps }) {
   useEffect(() => {
     if (!globalSocket) {
-      globalSocket = io('https://purple-reversi.up.railway.app', {
+      const SOCKET_URL =
+        process.env.NEXT_PUBLIC_SOCKET_URL || 'https://purple-reversi.up.railway.app';
+      globalSocket = io(SOCKET_URL, {
         reconnection: true,
       });
       window.__socket = globalSocket;
