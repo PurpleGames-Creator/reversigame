@@ -1,0 +1,13 @@
+# Render Blueprint — reversigame の socket.io サーバ（バックエンド）
+# ダッシュボードで「New +」→「Blueprint」→ このリポジトリを選ぶと、この定義で作成される。
+# PORT は Render が自動注入（server は process.env.PORT を使用）。
+services:
+  - type: web
+    name: purple-reversi
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
