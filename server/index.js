@@ -7,7 +7,7 @@ const registerSocketHandlers = require('./events/socketHandlers');
 const app = express();
 const httpServer = createServer(app);
 // 許可オリジン：環境変数 CLIENT_ORIGIN（カンマ区切り）があればそれを使う。
-// 無ければ localhost と *.vercel.app を許可（フロントの再デプロイでURLが変わっても壊れない）。
+// 無ければ localhost / *.vercel.app / *.github.io を許可（フロントの再デプロイでURLが変わっても壊れない）。
 const allowedOrigins = process.env.CLIENT_ORIGIN
   ? process.env.CLIENT_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean)
   : null;
@@ -16,9 +16,11 @@ const corsOrigin = (origin, callback) => {
   // サーバ間/ツール等 origin 無しは許可
   if (!origin) return callback(null, true);
   if (allowedOrigins) return callback(null, allowedOrigins.includes(origin));
+  const host = new URL(origin).hostname;
   const ok =
     /^http:\/\/localhost(:\d+)?$/.test(origin) ||
-    /\.vercel\.app$/.test(new URL(origin).hostname);
+    /\.vercel\.app$/.test(host) ||
+    /\.github\.io$/.test(host);
   return callback(null, ok);
 };
 
