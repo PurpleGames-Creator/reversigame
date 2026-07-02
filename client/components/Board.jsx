@@ -13,7 +13,7 @@ export default function Board({ board, legalMoves, lastMove, onCellClick }) {
   const isLastMove = (row, col) => lastMove && lastMove.row === row && lastMove.col === col;
 
   return (
-    <div className="flex justify-center items-center flex-1 p-4">
+    <div className="flex justify-center items-center flex-1 p-4" data-no-uisound>
       <div
         className="relative rounded-3xl p-2.5 w-full"
         style={{

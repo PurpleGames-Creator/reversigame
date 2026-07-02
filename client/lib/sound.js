@@ -75,6 +75,43 @@ export function playPlace() {
   noiseTick(0, 0.09);
 }
 
+// ボタンを押した時の「カチっ」というUIクリック音
+export function playClick() {
+  const c = getCtx();
+  if (!c) return;
+  const t0 = c.currentTime;
+
+  // 立ち上がりのノイズ（カチ）
+  const len = Math.floor(c.sampleRate * 0.012);
+  const buf = c.createBuffer(1, len, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  }
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 2500;
+  const gn = c.createGain();
+  gn.gain.value = 0.08;
+  src.connect(hp).connect(gn).connect(c.destination);
+  src.start(t0);
+
+  // 高音の小さなブリップ（クリックの芯）
+  const osc = c.createOscillator();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(2000, t0);
+  osc.frequency.exponentialRampToValueAtTime(1200, t0 + 0.03);
+  const g2 = c.createGain();
+  g2.gain.setValueAtTime(0.0001, t0);
+  g2.gain.exponentialRampToValueAtTime(0.05, t0 + 0.002);
+  g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.04);
+  osc.connect(g2).connect(c.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.05);
+}
+
 // ひっくり返る駒の音（枚数ぶん軽くカスケード）
 export function playFlips(count) {
   if (!count || count < 1) return;

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import Head from 'next/head';
 import '../styles/globals.css';
 import io from 'socket.io-client';
+import { playClick, unlockAudio } from '../lib/sound';
 
 let globalSocket = null;
 
@@ -15,6 +16,21 @@ function MyApp({ Component, pageProps }) {
       });
       window.__socket = globalSocket;
     }
+  }, []);
+
+  // サイト全体：ボタン押下で「カチっ」というクリック音（盤面のマスは配置音があるので除外）
+  useEffect(() => {
+    const onDown = (e) => {
+      unlockAudio();
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      const el = t.closest('button, [role="button"], a');
+      if (!el || el.disabled) return;
+      if (el.closest('[data-no-uisound]')) return;
+      playClick();
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
   }, []);
 
   return (
