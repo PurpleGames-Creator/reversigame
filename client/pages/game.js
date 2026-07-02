@@ -134,7 +134,7 @@ export default function GamePage() {
 
   const handleLeaveRoom = () => {
     socket.emit('leave-room', { roomId });
-    router.push('/lobby');
+    router.push('/');
   };
 
   const handleRematch = () => {
@@ -155,8 +155,8 @@ export default function GamePage() {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4 px-6">
         <p className="text-white/80 font-medium">ゲーム情報を読み込めません</p>
-        <button onClick={() => router.push('/lobby')} className="btn btn-glass px-6 py-3">
-          ロビーへ戻る
+        <button onClick={() => router.push('/')} className="btn btn-glass px-6 py-3">
+          タイトルへ戻る
         </button>
       </div>
     );
@@ -215,7 +215,7 @@ export default function GamePage() {
             </button>
           ) : isFinished ? (
             <button onClick={handleLeaveRoom} className="btn btn-primary w-full py-3.5">
-              ロビーに戻る
+              タイトルに戻る
             </button>
           ) : null}
         </div>
@@ -273,7 +273,7 @@ export default function GamePage() {
                   onClick={handleLeaveRoom}
                   className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200"
                 >
-                  ロビーに戻る
+                  タイトルに戻る
                 </button>
               </div>
             </div>

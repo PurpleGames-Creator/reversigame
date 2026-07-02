@@ -13,6 +13,7 @@ export default function TitleScreen() {
   const [loading, setLoading] = useState(false);
   const [showOnline, setShowOnline] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [matching, setMatching] = useState(false);
   const socket = initSocket();
   const inputRef = useRef(null);
 
@@ -37,24 +38,39 @@ export default function TitleScreen() {
     socket.on('disconnect', handleDisconnect);
     socket.on('online-count-updated', handleCount);
 
+    // マッチング成立 → 対局画面へ
+    const handleMatched = ({ roomId } = {}) => {
+      if (roomId) router.push(`/game?roomId=${roomId}`);
+    };
+    socket.on('matched', handleMatched);
+
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
       socket.off('online-count-updated', handleCount);
+      socket.off('matched', handleMatched);
     };
-  }, [socket]);
+  }, [socket, router]);
 
+  // ランダムマッチング開始（登録→待機列へ）
   const handleMatching = () => {
-    if (!playerName.trim() || loading) return;
+    if (!playerName.trim() || loading || matching) return;
     setLoading(true);
-    socket.emit('register', playerName, (success) => {
-      if (success) {
+    socket.emit('register', playerName, (res) => {
+      if (res) {
         setPlayerName(playerName);
-        router.push('/lobby');
+        setLoading(false);
+        setMatching(true);
+        socket.emit('find-match');
       } else {
         setLoading(false);
       }
     });
+  };
+
+  const handleCancelMatch = () => {
+    socket.emit('cancel-match');
+    setMatching(false);
   };
 
   const handleKeyPress = (e) => {
@@ -64,6 +80,35 @@ export default function TitleScreen() {
   return (
     <>
       <Head><title>Purple Reversi</title></Head>
+
+      {/* マッチング待機ポップアップ */}
+      {matching && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#2a0f4c]/75 backdrop-blur-sm">
+          <div className="glass-light rounded-3xl p-8 max-w-xs w-full text-center animate-rise">
+            <div className="flex justify-center mb-3">
+              <Papuko size={96} float glow />
+            </div>
+            <p className="text-lg font-bold text-gray-900 mb-1">相手を待っています</p>
+            <p className="text-sm text-gray-500 mb-5">
+              {connected
+                ? 'マッチングするまでお待ちください'
+                : 'サーバーを起動中…最大50秒ほどかかります'}
+            </p>
+            <div className="flex justify-center gap-2 mb-6">
+              <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <button
+              onClick={handleCancelMatch}
+              className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200"
+            >
+              待機をやめる
+            </button>
+          </div>
+        </div>
+      )}
+
       <main
         className={`min-h-screen [min-height:100dvh] flex flex-col items-center px-6 ${
           showOnline ? 'justify-start pt-14 pb-[60vh]' : 'justify-center py-12'

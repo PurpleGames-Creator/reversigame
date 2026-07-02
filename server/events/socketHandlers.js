@@ -13,6 +13,7 @@ const { getLegalMoves } = require('../game/rules');
 function registerSocketHandlers(io) {
   const roomManager = new RoomManager();
   const playerNames = new Map(); // socket.id -> name
+  let matchQueue = []; // ランダムマッチ待ちの socket.id
 
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -106,6 +107,61 @@ function registerSocketHandlers(io) {
         console.error('create-room error:', error);
         if (callback) callback({ success: false, error: error.message });
       }
+    });
+
+    // ---- find-match（ランダムマッチング） --------------------------------
+    socket.on('find-match', (callback) => {
+      try {
+        const name = playerNames.get(socket.id);
+        if (!name) throw new Error('Player not registered');
+
+        // 二重登録を除去
+        matchQueue = matchQueue.filter((id) => id !== socket.id);
+
+        // 待機中の相手を探す（切断済みは飛ばす）
+        let opponentId = null;
+        while (matchQueue.length > 0) {
+          const cand = matchQueue.shift();
+          if (cand !== socket.id && io.sockets.sockets.get(cand)) {
+            opponentId = cand;
+            break;
+          }
+        }
+
+        if (opponentId) {
+          // 待っていた方を host(先手/白)、来た方を guest にして対局開始
+          const oppName = playerNames.get(opponentId) || 'Player';
+          const roomId = roomManager.createRoom(opponentId, oppName);
+          const oppSocket = io.sockets.sockets.get(opponentId);
+          if (oppSocket) oppSocket.join(roomId);
+          const room = roomManager.joinRoom(roomId, socket.id, name);
+          socket.join(roomId);
+          room.lastMove = null;
+          console.log(`Matched: ${oppName} vs ${name} (${roomId})`);
+
+          const state = buildClientState(room);
+          io.to(roomId).emit('matched', { roomId });
+          io.to(roomId).emit('game-started', state);
+          io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
+          room.game.startTurn();
+          emitRoomsUpdated(io, roomManager, playerNames);
+
+          if (callback) callback({ success: true, matched: true, roomId });
+        } else {
+          // 相手が居なければ待機列へ
+          matchQueue.push(socket.id);
+          if (callback) callback({ success: true, matched: false });
+        }
+      } catch (error) {
+        console.error('find-match error:', error);
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
+    // ---- cancel-match ----------------------------------------------------
+    socket.on('cancel-match', (callback) => {
+      matchQueue = matchQueue.filter((id) => id !== socket.id);
+      if (callback) callback({ success: true });
     });
 
     // ---- join-room -------------------------------------------------------
@@ -270,6 +326,7 @@ function registerSocketHandlers(io) {
     socket.on('disconnect', () => {
       try {
         console.log(`User disconnected: ${socket.id}`);
+        matchQueue = matchQueue.filter((id) => id !== socket.id);
         const room = roomManager.getPlayerRoom(socket.id);
         if (room) {
           // 対局相手が居れば（対局中でも終局後の再戦待ちでも）通知
