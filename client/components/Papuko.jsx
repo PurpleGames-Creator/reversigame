@@ -1,8 +1,12 @@
-import Image from 'next/image';
+import { useRouter } from 'next/router';
 
 // パプ子（パプ太郎＋リボン）マスコット。Purple Games 共通キャラ。
 // size: 画像の一辺(px)。float: ふわふわ浮遊。glow: 背後に柔らかな光。
+// ※ GitHub Pages(basePath=/reversigame)対策で src に basePath を付与する。
 export default function Papuko({ size = 140, float = false, glow = false, className = '' }) {
+  const { basePath } = useRouter();
+  const src = `${basePath}/paputaro.png`;
+
   return (
     <div
       className={`relative inline-flex items-center justify-center ${className}`}
@@ -25,12 +29,12 @@ export default function Papuko({ size = 140, float = false, glow = false, classN
         className={`relative ${float ? 'papuko-float' : ''}`}
         style={{ width: size, height: size }}
       >
-        <Image
-          src="/paputaro.png"
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
           alt="パプ子"
           width={size}
           height={size}
-          priority
           style={{
             width: '100%',
             height: '100%',
