@@ -213,10 +213,48 @@ function registerSocketHandlers(io) {
       }
     });
 
+    // ---- request-rematch -------------------------------------------------
+    socket.on('request-rematch', (payload, callback) => {
+      try {
+        const roomId = getRoomId(payload);
+        const room = roomManager.getPlayerRoom(socket.id);
+        if (!room || room.roomId !== roomId) throw new Error('Invalid room');
+        if (!room.guest) throw new Error('相手がいません');
+
+        room.rematchVotes = room.rematchVotes || new Set();
+        room.rematchVotes.add(socket.id);
+
+        // 相手に「再戦希望」を通知
+        socket.to(roomId).emit('rematch-requested', { by: socket.id });
+
+        // 両者そろったらリセットして再開
+        if (room.rematchVotes.has(room.host.id) && room.rematchVotes.has(room.guest.id)) {
+          room.rematchVotes.clear();
+          room.lastMove = null;
+          room.resignWinnerId = null;
+          roomManager.resetGame(roomId);
+          const state = buildClientState(room);
+          io.to(roomId).emit('game-started', state);
+          io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
+          room.game.startTurn();
+          emitRoomsUpdated(io, roomManager, playerNames);
+        }
+        if (callback) callback({ success: true });
+      } catch (error) {
+        console.error('request-rematch error:', error);
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
     // ---- leave-room ------------------------------------------------------
     socket.on('leave-room', (payload, callback) => {
       try {
         const roomId = getRoomId(payload);
+        const room = roomManager.getPlayerRoom(socket.id);
+        // 対局相手が居る部屋を抜けるなら相手に通知（再戦待ちの相手が固まらないように）
+        if (room && room.host && room.guest) {
+          socket.to(roomId).emit('opponent-disconnected');
+        }
         socket.leave(roomId);
         roomManager.leaveRoom(roomId);
         console.log(`Player ${socket.id} left ${roomId}`);
@@ -233,10 +271,11 @@ function registerSocketHandlers(io) {
       try {
         console.log(`User disconnected: ${socket.id}`);
         const room = roomManager.getPlayerRoom(socket.id);
-        if (room && room.status === 'playing') {
-          io.to(room.roomId).emit('opponent-disconnected');
-          roomManager.leaveRoom(room.roomId);
-        } else if (room) {
+        if (room) {
+          // 対局相手が居れば（対局中でも終局後の再戦待ちでも）通知
+          if (room.host && room.guest) {
+            io.to(room.roomId).emit('opponent-disconnected');
+          }
           roomManager.leaveRoom(room.roomId);
         }
         playerNames.delete(socket.id);

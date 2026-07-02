@@ -23,6 +23,7 @@ export default function GamePage() {
   const [legalMoves, setLegalMoves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [rematch, setRematch] = useState('idle'); // idle | waiting | offered
   const prevBoardRef = useRef(null);
 
   const socket = initSocket();
@@ -45,6 +46,8 @@ export default function GamePage() {
     const handleGameStarted = (data) => {
       prevBoardRef.current = data.board;
       setGameState(data);
+      setRematch('idle');
+      setError(null);
       setLoading(false);
     };
     const handleBoardUpdated = (data) => {
@@ -81,13 +84,20 @@ export default function GamePage() {
         player2: data.player2,
       }));
     };
-    const handleOpponentDisconnected = () => setError('相手が接続を切りました');
+    const handleOpponentDisconnected = () => {
+      setError('相手が退出しました');
+      setRematch('idle');
+    };
+    const handleRematchRequested = ({ by } = {}) => {
+      if (by !== socket.id) setRematch((prev) => (prev === 'waiting' ? prev : 'offered'));
+    };
 
     socket.on('game-started', handleGameStarted);
     socket.on('board-updated', handleBoardUpdated);
     socket.on('legal-moves-updated', handleLegalMovesUpdated);
     socket.on('game-finished', handleGameFinished);
     socket.on('opponent-disconnected', handleOpponentDisconnected);
+    socket.on('rematch-requested', handleRematchRequested);
 
     socket.emit('get-game-state', { roomId }, (data) => {
       if (data && data.board) {
@@ -104,6 +114,7 @@ export default function GamePage() {
       socket.off('legal-moves-updated', handleLegalMovesUpdated);
       socket.off('game-finished', handleGameFinished);
       socket.off('opponent-disconnected', handleOpponentDisconnected);
+      socket.off('rematch-requested', handleRematchRequested);
     };
   }, [roomId, socket, router]);
 
@@ -124,6 +135,12 @@ export default function GamePage() {
   const handleLeaveRoom = () => {
     socket.emit('leave-room', { roomId });
     router.push('/lobby');
+  };
+
+  const handleRematch = () => {
+    unlockAudio();
+    socket.emit('request-rematch', { roomId });
+    setRematch('waiting');
   };
 
   if (loading && !gameState) {
@@ -233,9 +250,32 @@ export default function GamePage() {
                 </div>
               </div>
 
-              <button onClick={handleLeaveRoom} className="btn btn-violet w-full py-3.5">
-                ロビーに戻る
-              </button>
+              <div className="space-y-2.5">
+                {rematch === 'waiting' ? (
+                  <div className="w-full py-3.5 rounded-full bg-violet-100 text-violet-700 font-semibold flex items-center justify-center gap-2">
+                    <span className="flex gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                    相手の返事を待っています…
+                  </div>
+                ) : rematch === 'offered' ? (
+                  <button onClick={handleRematch} className="btn btn-violet w-full py-3.5">
+                    相手が再戦希望！受けて対戦
+                  </button>
+                ) : (
+                  <button onClick={handleRematch} className="btn btn-violet w-full py-3.5">
+                    同じ相手ともう一度
+                  </button>
+                )}
+                <button
+                  onClick={handleLeaveRoom}
+                  className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200"
+                >
+                  ロビーに戻る
+                </button>
+              </div>
             </div>
           </div>
         )}

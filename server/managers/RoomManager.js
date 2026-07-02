@@ -94,6 +94,23 @@ class RoomManager {
   }
 
   /**
+   * Reset a finished room's game for a rematch (same host/guest)
+   *
+   * @param {string} roomId
+   * @returns {Object} Updated room object
+   * @throws {Error} If room/players not available
+   */
+  resetGame(roomId) {
+    const room = this.rooms.get(roomId);
+    if (!room || !room.host || !room.guest) {
+      throw new Error('Rematch not available');
+    }
+    room.game = new ReversiGame(room.host, room.guest);
+    room.status = 'playing';
+    return room;
+  }
+
+  /**
    * Remove a room and all associated mappings
    * Called when game is finished and players leave
    *

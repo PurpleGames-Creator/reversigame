@@ -24,6 +24,38 @@ function MyApp({ Component, pageProps }) {
         <meta name="apple-mobile-web-app-capable" content="true" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="theme-color" content="#2a0f4c" />
+
+        {/* 基本 */}
+        <title>Purple Reversi｜パプ子と対戦・オンライン対戦</title>
+        <meta
+          name="description"
+          content="シンプルな対戦リバーシ。CPU（パプ子）とすぐ遊べて、友達とオンライン対戦もできる。"
+        />
+        <link rel="icon" href="https://purplegames-creator.github.io/reversigame/paputaro.png" />
+        <link rel="apple-touch-icon" href="https://purplegames-creator.github.io/reversigame/paputaro.png" />
+
+        {/* OGP（SNSシェア） */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Purple Games" />
+        <meta property="og:title" content="Purple Reversi｜パプ子と対戦・オンライン対戦" />
+        <meta
+          property="og:description"
+          content="シンプルな対戦リバーシ。CPU（パプ子）とすぐ遊べて、友達とオンライン対戦もできる。"
+        />
+        <meta property="og:url" content="https://purplegames-creator.github.io/reversigame/" />
+        <meta property="og:image" content="https://purplegames-creator.github.io/reversigame/paputaro.png" />
+        <meta property="og:image:width" content="489" />
+        <meta property="og:image:height" content="496" />
+
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="Purple Reversi｜パプ子と対戦・オンライン対戦" />
+        <meta
+          name="twitter:description"
+          content="シンプルな対戦リバーシ。CPU（パプ子）とすぐ遊べて、友達とオンライン対戦もできる。"
+        />
+        <meta name="twitter:image" content="https://purplegames-creator.github.io/reversigame/paputaro.png" />
+
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

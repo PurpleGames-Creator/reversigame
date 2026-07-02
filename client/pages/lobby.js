@@ -81,6 +81,24 @@ export default function LobbyPage() {
   return (
     <>
       <Head><title>対戦ロビー | Purple Reversi</title></Head>
+
+      {/* コールドスタート待機オーバーレイ */}
+      {busy && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-8 text-center bg-[#2a0f4c]/75 backdrop-blur-sm">
+          <Papuko size={100} float glow />
+          <p className="text-white font-semibold text-lg">サーバーに接続中…</p>
+          <p className="text-white/60 text-sm leading-relaxed">
+            サーバーが眠っていると<br />
+            初回は起動に最大50秒ほどかかります
+          </p>
+          <div className="flex gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col h-screen">
         {/* ヘッダー */}
         <header className="sticky top-0 z-10 glass rounded-none px-4 py-3 flex items-center justify-between">
