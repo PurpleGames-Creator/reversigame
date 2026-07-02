@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { initSocket } from '../lib/socket';
 import { getPlayerName, setPlayerName } from '../lib/storage';
 import Papuko from '../components/Papuko';
+import BoardBackdrop from '../components/BoardBackdrop';
 
 export default function TitleScreen() {
   const router = useRouter();
@@ -69,9 +70,14 @@ export default function TitleScreen() {
         }`}
       >
         <div className="w-full max-w-sm flex flex-col items-center">
-          {/* マスコット */}
-          <div className="animate-rise">
-            <Papuko size={168} float glow />
+          {/* マスコット＋背景のリバーシ盤 */}
+          <div className="relative animate-rise" style={{ width: 300, height: 300 }}>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <BoardBackdrop size={300} />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Papuko size={156} float glow />
+            </div>
           </div>
 
           {/* タイトル */}
