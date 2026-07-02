@@ -14,6 +14,7 @@ function registerSocketHandlers(io) {
   const roomManager = new RoomManager();
   const playerNames = new Map(); // socket.id -> name
   let matchQueue = []; // ランダムマッチ待ちの socket.id
+  const privateWaiting = new Map(); // あいことば -> 待機中の socket.id
 
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -161,6 +162,64 @@ function registerSocketHandlers(io) {
     // ---- cancel-match ----------------------------------------------------
     socket.on('cancel-match', (callback) => {
       matchQueue = matchQueue.filter((id) => id !== socket.id);
+      if (callback) callback({ success: true });
+    });
+
+    // ---- private-match（合言葉マッチング） ------------------------------
+    socket.on('private-match', (payload, callback) => {
+      try {
+        const name = playerNames.get(socket.id);
+        if (!name) throw new Error('Player not registered');
+        const code = String((payload && payload.code) || '').trim().slice(0, 32);
+        if (!code) throw new Error('あいことばを入力してください');
+
+        // 自分が別コードで待機中なら解除（重複防止）
+        for (const [k, v] of privateWaiting) {
+          if (v === socket.id) privateWaiting.delete(k);
+        }
+
+        const waiterId = privateWaiting.get(code);
+        if (waiterId && waiterId !== socket.id && io.sockets.sockets.get(waiterId)) {
+          // 同じ合言葉の相手が居た → その2人で対局開始
+          privateWaiting.delete(code);
+          const oppName = playerNames.get(waiterId) || 'Player';
+          const roomId = roomManager.createRoom(waiterId, oppName); // 先に待っていた方=host(白/先手)
+          const oppSocket = io.sockets.sockets.get(waiterId);
+          if (oppSocket) oppSocket.join(roomId);
+          const room = roomManager.joinRoom(roomId, socket.id, name);
+          socket.join(roomId);
+          room.lastMove = null;
+          console.log(`Private matched (${code}): ${oppName} vs ${name} (${roomId})`);
+
+          const state = buildClientState(room);
+          io.to(roomId).emit('matched', { roomId });
+          io.to(roomId).emit('game-started', state);
+          io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
+          room.game.startTurn();
+          emitRoomsUpdated(io, roomManager, playerNames);
+
+          if (callback) callback({ success: true, matched: true, roomId });
+        } else {
+          // 相手待ち（この合言葉で待機）
+          privateWaiting.set(code, socket.id);
+          if (callback) callback({ success: true, matched: false });
+        }
+      } catch (error) {
+        console.error('private-match error:', error);
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
+    // ---- cancel-private --------------------------------------------------
+    socket.on('cancel-private', (payload, callback) => {
+      const code = String((payload && payload.code) || '').trim().slice(0, 32);
+      if (code) {
+        if (privateWaiting.get(code) === socket.id) privateWaiting.delete(code);
+      } else {
+        for (const [k, v] of privateWaiting) {
+          if (v === socket.id) privateWaiting.delete(k);
+        }
+      }
       if (callback) callback({ success: true });
     });
 
@@ -368,6 +427,9 @@ function registerSocketHandlers(io) {
       try {
         console.log(`User disconnected: ${socket.id}`);
         matchQueue = matchQueue.filter((id) => id !== socket.id);
+        for (const [k, v] of privateWaiting) {
+          if (v === socket.id) privateWaiting.delete(k);
+        }
         const room = roomManager.getPlayerRoom(socket.id);
         if (room) {
           // 対局相手が居れば（対局中でも終局後の再戦待ちでも）通知
