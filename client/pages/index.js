@@ -130,8 +130,9 @@ export default function TitleScreen() {
           <h1 className="wordmark text-5xl text-white text-center animate-rise delay-1">
             Purple Reversi
           </h1>
-          <p className="text-white/55 mt-3 mb-10 text-[15px] animate-rise delay-2">
-            シンプルな対戦リバーシ
+          <p className="mt-3 mb-10 text-[15px] text-white/70 flex items-center gap-2 animate-rise delay-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
+            {onlineCount}人がオンライン
           </p>
 
           {/* アクション */}
@@ -146,12 +147,9 @@ export default function TitleScreen() {
             {!showOnline ? (
               <button
                 onClick={() => setShowOnline(true)}
-                className="btn btn-glass w-full py-4 text-[17px] flex-col gap-0 animate-rise delay-3"
+                className="btn btn-glass w-full py-4 text-[17px] animate-rise delay-3"
               >
-                <span>オンライン対戦</span>
-                <span className="text-xs font-normal text-white/55 mt-0.5">
-                  {onlineCount}人がオンライン
-                </span>
+                オンライン対戦
               </button>
             ) : (
               <div className="glass rounded-3xl p-4 space-y-3 animate-rise">
@@ -181,9 +179,6 @@ export default function TitleScreen() {
                     初回は最大50秒ほどかかります
                   </p>
                 )}
-                <p className="text-center text-xs text-white/45">
-                  {onlineCount}人がオンライン
-                </p>
               </div>
             )}
           </div>
