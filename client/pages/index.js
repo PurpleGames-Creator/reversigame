@@ -14,6 +14,8 @@ export default function TitleScreen() {
   const [showOnline, setShowOnline] = useState(false);
   const [connected, setConnected] = useState(false);
   const [matching, setMatching] = useState(false);
+  const [spectateOpen, setSpectateOpen] = useState(false);
+  const [liveGames, setLiveGames] = useState([]);
   const socket = initSocket();
   const inputRef = useRef(null);
 
@@ -34,9 +36,13 @@ export default function TitleScreen() {
     const handleCount = (data) =>
       setOnlineCount(typeof data === 'number' ? data : data?.onlineCount ?? 0);
 
+    // 進行中の対戦一覧（観戦用）を最新に保つ
+    const handleRooms = (data) => setLiveGames(data?.playing || []);
+
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('online-count-updated', handleCount);
+    socket.on('rooms-updated', handleRooms);
 
     // マッチング成立 → 対局画面へ
     const handleMatched = ({ roomId } = {}) => {
@@ -49,8 +55,18 @@ export default function TitleScreen() {
       socket.off('disconnect', handleDisconnect);
       socket.off('online-count-updated', handleCount);
       socket.off('matched', handleMatched);
+      socket.off('rooms-updated', handleRooms);
     };
   }, [socket, router]);
+
+  const handleOpenSpectate = () => {
+    setSpectateOpen(true);
+    socket.emit('get-live-games', (res) => setLiveGames((res && res.games) || []));
+  };
+
+  const handleSpectate = (rid) => {
+    router.push(`/game?roomId=${rid}&spectate=1`);
+  };
 
   // ランダムマッチング開始（登録→待機列へ）
   const handleMatching = () => {
@@ -80,6 +96,48 @@ export default function TitleScreen() {
   return (
     <>
       <Head><title>Purple Reversi</title></Head>
+
+      {/* 観戦：進行中の対戦一覧 */}
+      {spectateOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#2a0f4c]/75 backdrop-blur-sm">
+          <div className="glass-light rounded-3xl p-6 max-w-sm w-full animate-rise">
+            <h2 className="wordmark text-xl text-gray-900 mb-1 text-center">観戦する</h2>
+            <p className="text-sm text-gray-500 mb-4 text-center">見たい対戦を選んでください</p>
+
+            <div className="space-y-2.5 max-h-[50vh] overflow-y-auto">
+              {liveGames.length > 0 ? (
+                liveGames.map((g) => (
+                  <button
+                    key={g.roomId}
+                    onClick={() => handleSpectate(g.roomId)}
+                    className="w-full rounded-2xl px-4 py-3 bg-violet-50 hover:bg-violet-100 transition-colors flex items-center justify-between gap-3"
+                  >
+                    <span className="text-sm font-semibold text-gray-800 truncate">
+                      <span className="text-gray-900">{g.player1}</span>
+                      <span className="text-gray-400 font-normal"> vs </span>
+                      <span className="text-violet-700">{g.player2}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-bold text-white bg-violet-600 rounded-full px-3 py-1.5">
+                      観戦
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="text-center text-sm text-gray-500 py-8">
+                  いま対戦中の試合はありません
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={() => setSpectateOpen(false)}
+              className="btn w-full py-3 mt-4 bg-gray-100 text-gray-800 hover:bg-gray-200"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* マッチング待機ポップアップ */}
       {matching && (
@@ -181,6 +239,14 @@ export default function TitleScreen() {
                 )}
               </div>
             )}
+
+            {/* 観戦 */}
+            <button
+              onClick={handleOpenSpectate}
+              className="btn btn-glass w-full py-3.5 text-[15px] animate-rise delay-4"
+            >
+              観戦する
+            </button>
           </div>
         </div>
       </main>

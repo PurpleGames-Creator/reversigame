@@ -19,6 +19,7 @@ function countChanged(prev, next) {
 export default function GamePage() {
   const router = useRouter();
   const { roomId } = router.query;
+  const isSpectator = router.query.spectate === '1';
   const [gameState, setGameState] = useState(null);
   const [legalMoves, setLegalMoves] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +86,7 @@ export default function GamePage() {
       }));
     };
     const handleOpponentDisconnected = () => {
-      setError('相手が退出しました');
+      setError(isSpectator ? 'この対戦は終了しました' : '相手が退出しました');
       setRematch('idle');
     };
     const handleRematchRequested = ({ by } = {}) => {
@@ -99,14 +100,28 @@ export default function GamePage() {
     socket.on('opponent-disconnected', handleOpponentDisconnected);
     socket.on('rematch-requested', handleRematchRequested);
 
-    socket.emit('get-game-state', { roomId }, (data) => {
-      if (data && data.board) {
-        prevBoardRef.current = data.board;
-        setGameState(data);
-        setLegalMoves(data.legalMoves || []);
-        setLoading(false);
-      }
-    });
+    if (isSpectator) {
+      // 観戦：プレイヤーにはならずルームに参加して状態を取得
+      socket.emit('spectate', { roomId }, (res) => {
+        if (res && res.success && res.state && res.state.board) {
+          prevBoardRef.current = res.state.board;
+          setGameState(res.state);
+          setLoading(false);
+        } else {
+          setError((res && res.error) || 'その対戦は見つかりません');
+          setLoading(false);
+        }
+      });
+    } else {
+      socket.emit('get-game-state', { roomId }, (data) => {
+        if (data && data.board) {
+          prevBoardRef.current = data.board;
+          setGameState(data);
+          setLegalMoves(data.legalMoves || []);
+          setLoading(false);
+        }
+      });
+    }
 
     return () => {
       socket.off('game-started', handleGameStarted);
@@ -116,15 +131,21 @@ export default function GamePage() {
       socket.off('opponent-disconnected', handleOpponentDisconnected);
       socket.off('rematch-requested', handleRematchRequested);
     };
-  }, [roomId, socket, router]);
+  }, [roomId, socket, router, isSpectator]);
 
   const handleCellClick = (row, col) => {
+    if (isSpectator) return;
     unlockAudio();
     setLoading(true);
     socket.emit('place-piece', { roomId, row, col }, (response) => {
       setLoading(false);
       if (response && response.error) setError(response.error);
     });
+  };
+
+  const handleExitSpectate = () => {
+    socket.emit('leave-spectate', { roomId });
+    router.push('/');
   };
 
   const handleResign = () => {
@@ -164,12 +185,16 @@ export default function GamePage() {
 
   const isPlaying = gameState.gameState === 'playing';
   const isFinished = gameState.gameState === 'finished';
-  const myTurn = isPlaying && socket && gameState.currentPlayer === socket.id;
+  const myTurn = isPlaying && !isSpectator && socket && gameState.currentPlayer === socket.id;
   const shownLegalMoves = myTurn ? legalMoves : [];
+  const currentName =
+    gameState.currentPlayer === gameState.player1?.id
+      ? gameState.player1?.name
+      : gameState.player2?.name;
 
   return (
     <>
-      <Head><title>対戦中 | Purple Reversi</title></Head>
+      <Head><title>{isSpectator ? '観戦中' : '対戦中'} | Purple Reversi</title></Head>
       <div className="flex flex-col h-screen">
         {error && (
           <div className="glass-light rounded-2xl mx-4 mt-4 px-4 py-3 flex items-center justify-between text-sm text-rose-700">
@@ -186,7 +211,18 @@ export default function GamePage() {
           currentPlayer={gameState.currentPlayer}
         />
 
-        {isPlaying && (
+        {isPlaying && isSpectator && (
+          <div className="text-center mt-3 flex flex-col items-center gap-1.5">
+            <span className="text-[11px] font-semibold tracking-wide text-white/50 bg-white/10 rounded-full px-3 py-1">
+              観戦中
+            </span>
+            <span className="text-sm font-semibold text-white/80">
+              {currentName} の番
+            </span>
+          </div>
+        )}
+
+        {isPlaying && !isSpectator && (
           <>
             <div className="text-center mt-3">
               <span
@@ -209,7 +245,11 @@ export default function GamePage() {
         />
 
         <div className="px-4 pb-6">
-          {isPlaying ? (
+          {isSpectator ? (
+            <button onClick={handleExitSpectate} className="btn btn-glass w-full py-3.5">
+              観戦をやめる
+            </button>
+          ) : isPlaying ? (
             <button onClick={handleResign} disabled={loading} className="btn btn-glass w-full py-3.5">
               投了する
             </button>
@@ -251,7 +291,11 @@ export default function GamePage() {
               </div>
 
               <div className="space-y-2.5">
-                {rematch === 'waiting' ? (
+                {isSpectator ? (
+                  <button onClick={handleExitSpectate} className="btn btn-violet w-full py-3.5">
+                    観戦を終える
+                  </button>
+                ) : rematch === 'waiting' ? (
                   <div className="w-full py-3.5 rounded-full bg-violet-100 text-violet-700 font-semibold flex items-center justify-center gap-2">
                     <span className="flex gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -269,12 +313,14 @@ export default function GamePage() {
                     同じ相手ともう一度
                   </button>
                 )}
-                <button
-                  onClick={handleLeaveRoom}
-                  className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200"
-                >
-                  タイトルに戻る
-                </button>
+                {!isSpectator && (
+                  <button
+                    onClick={handleLeaveRoom}
+                    className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  >
+                    タイトルに戻る
+                  </button>
+                )}
               </div>
             </div>
           </div>

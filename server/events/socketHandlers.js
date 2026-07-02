@@ -302,6 +302,47 @@ function registerSocketHandlers(io) {
       }
     });
 
+    // ---- get-live-games（観戦できる進行中の対戦一覧） --------------------
+    socket.on('get-live-games', (callback) => {
+      try {
+        const games = roomManager.getPlayingRooms().map((room) => ({
+          roomId: room.roomId,
+          player1: room.host.name,
+          player2: room.guest ? room.guest.name : '—',
+        }));
+        if (callback) callback({ games });
+      } catch (error) {
+        console.error('get-live-games error:', error);
+        if (callback) callback({ games: [], error: error.message });
+      }
+    });
+
+    // ---- spectate（観戦：プレイヤーにはならずルームの更新だけ受信） -------
+    socket.on('spectate', (payload, callback) => {
+      try {
+        const roomId = getRoomId(payload);
+        const room = roomManager.getRoom(roomId);
+        if (!room || !room.game) throw new Error('その対戦は見つかりません');
+        socket.join(roomId); // 更新配信を受け取るためルームに参加（playerToRoomには入れない）
+        console.log(`Spectator ${socket.id} watching ${roomId}`);
+        if (callback) callback({ success: true, state: buildClientState(room) });
+      } catch (error) {
+        console.error('spectate error:', error);
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
+    // ---- leave-spectate --------------------------------------------------
+    socket.on('leave-spectate', (payload, callback) => {
+      try {
+        const roomId = getRoomId(payload);
+        socket.leave(roomId);
+        if (callback) callback({ success: true });
+      } catch (error) {
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
     // ---- leave-room ------------------------------------------------------
     socket.on('leave-room', (payload, callback) => {
       try {
@@ -352,6 +393,7 @@ function buildRoomsPayload(roomManager, playerNames) {
     hostName: room.host.name,
   }));
   const playing = roomManager.getPlayingRooms().map((room) => ({
+    roomId: room.roomId,
     player1: room.host.name,
     player2: room.guest ? room.guest.name : 'Waiting...',
   }));

@@ -144,6 +144,16 @@ class RoomManager {
   }
 
   /**
+   * Get a room by its ID (for spectators)
+   *
+   * @param {string} roomId
+   * @returns {Object|null}
+   */
+  getRoom(roomId) {
+    return this.rooms.get(roomId) || null;
+  }
+
+  /**
    * Get all rooms waiting for guests
    *
    * @returns {Array} Array of waiting room objects
