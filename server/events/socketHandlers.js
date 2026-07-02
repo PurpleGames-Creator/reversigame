@@ -2,347 +2,268 @@ const RoomManager = require('../managers/RoomManager');
 const { getLegalMoves } = require('../game/rules');
 
 /**
- * Socket.io Event Handlers Registration
+ * Socket.io イベントハンドラ登録
  *
- * Registers all Socket.io event handlers for real-time game communication
- * Manages player connections, room creation/joining, and game state synchronization
- *
- * @param {Server} io - Socket.io server instance
+ * クライアント(client/pages/*)が期待する形へ揃えた状態を返すのがポイント:
+ * - 盤面値: 1=白(host/先手), 2=紫(guest)
+ * - player1=白(host), player2=紫(guest)。currentPlayer/winner はプレイヤーID(socket.id)
+ * - legalMoves は "row,col" 文字列配列（Boardコンポーネント互換）
+ * - gameState は 'waiting' | 'playing' | 'finished'
  */
 function registerSocketHandlers(io) {
-  // Singleton RoomManager instance for this server
   const roomManager = new RoomManager();
-
-  // Map to store player names by socket ID
-  const playerNames = new Map();
+  const playerNames = new Map(); // socket.id -> name
 
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
 
-    /**
-     * EVENT: 'register' - Player registration
-     *
-     * Register a player with their name and get assigned to this socket
-     */
+    // ---- ヘルパ ----------------------------------------------------------
+
+    // クライアントが期待する形の状態オブジェクトを組み立てる
+    const buildClientState = (room) => {
+      // まだ対局前（募集中）
+      if (!room.game) {
+        return {
+          gameState: room.status, // 'waiting'
+          waiting: true,
+          player1: { id: room.host.id, name: room.host.name, pieces: 2 },
+          player2: room.guest
+            ? { id: room.guest.id, name: room.guest.name, pieces: 2 }
+            : null,
+          currentPlayer: null,
+          board: null,
+          lastMove: null,
+          winner: null,
+        };
+      }
+
+      const s = room.game.serialize();
+      const currentPlayer = s.currentPlayer === 'black' ? room.host.id : room.guest.id;
+
+      let winner = null;
+      if (s.isFinished) {
+        if (room.resignWinnerId) winner = room.resignWinnerId;
+        else if (s.winner === 'black') winner = room.host.id;
+        else if (s.winner === 'white') winner = room.guest.id;
+        else winner = 'draw';
+      }
+
+      return {
+        board: s.board,
+        currentPlayer,
+        gameState: s.isFinished ? 'finished' : 'playing',
+        player1: { id: room.host.id, name: room.host.name, pieces: s.blackCount },
+        player2: { id: room.guest.id, name: room.guest.name, pieces: s.whiteCount },
+        lastMove: room.lastMove || null,
+        winner,
+      };
+    };
+
+    // "row,col" 文字列配列で合法手を返す
+    const legalMovesStr = (game) =>
+      getLegalMoves(game).map(([r, c]) => `${r},${c}`);
+
+    // payload が {roomId} でも文字列でも roomId を取り出す
+    const getRoomId = (payload) =>
+      payload && typeof payload === 'object' ? payload.roomId : payload;
+
+    // ---- register --------------------------------------------------------
     socket.on('register', (playerName, callback) => {
       try {
-        // Store player name
         playerNames.set(socket.id, playerName);
-
         console.log(`Player registered: ${socket.id} - ${playerName}`);
-
-        // Callback success
-        if (callback) {
-          callback({ success: true });
-        }
-
-        // Emit online count update to all clients
-        const onlineCount = playerNames.size;
-        io.emit('online-count-updated', { onlineCount });
+        if (callback) callback({ success: true });
+        io.emit('online-count-updated', { onlineCount: playerNames.size });
       } catch (error) {
-        console.error('Error in register event:', error);
-        if (callback) {
-          callback({ success: false, error: error.message });
-        }
+        console.error('register error:', error);
+        if (callback) callback({ success: false, error: error.message });
       }
     });
 
-    /**
-     * EVENT: 'get-rooms' - Get room lists
-     *
-     * Retrieve all waiting and playing rooms for the client to display
-     */
+    // ---- get-rooms -------------------------------------------------------
     socket.on('get-rooms', (callback) => {
       try {
-        const waitingRooms = roomManager.getWaitingRooms().map(room => ({
-          roomId: room.roomId,
-          hostName: room.host.name
-        }));
-
-        const playingRooms = roomManager.getPlayingRooms().map(room => ({
-          player1: room.host.name,
-          player2: room.guest ? room.guest.name : 'Waiting...'
-        }));
-
-        const onlineCount = playerNames.size;
-
-        if (callback) {
-          callback({
-            waiting: waitingRooms,
-            playing: playingRooms,
-            onlineCount
-          });
-        }
+        if (callback) callback(buildRoomsPayload(roomManager, playerNames));
       } catch (error) {
-        console.error('Error in get-rooms event:', error);
-        if (callback) {
-          callback({ error: error.message });
-        }
+        console.error('get-rooms error:', error);
+        if (callback) callback({ error: error.message });
       }
     });
 
-    /**
-     * EVENT: 'create-room' - Create new room
-     *
-     * Create a new game room with this player as host
-     */
+    // ---- create-room -----------------------------------------------------
     socket.on('create-room', (callback) => {
       try {
         const playerName = playerNames.get(socket.id);
+        if (!playerName) throw new Error('Player not registered');
 
-        if (!playerName) {
-          throw new Error('Player not registered');
-        }
-
-        // Create room via RoomManager
         const roomId = roomManager.createRoom(socket.id, playerName);
-
-        // Join the socket to the room
         socket.join(roomId);
-
         console.log(`Room created: ${roomId} by ${playerName}`);
 
-        // Emit rooms-updated to all clients
-        emitRoomsUpdated(io, roomManager);
-
-        // Callback with room ID
-        if (callback) {
-          callback({ roomId, success: true });
-        }
+        emitRoomsUpdated(io, roomManager, playerNames);
+        if (callback) callback({ roomId, success: true });
       } catch (error) {
-        console.error('Error in create-room event:', error);
-        if (callback) {
-          callback({ success: false, error: error.message });
-        }
+        console.error('create-room error:', error);
+        if (callback) callback({ success: false, error: error.message });
       }
     });
 
-    /**
-     * EVENT: 'join-room' - Join existing room
-     *
-     * Join an existing waiting room to start a game
-     */
-    socket.on('join-room', (roomId, callback) => {
+    // ---- join-room -------------------------------------------------------
+    socket.on('join-room', (payload, callback) => {
       try {
+        const roomId = getRoomId(payload);
         const playerName = playerNames.get(socket.id);
+        if (!playerName) throw new Error('Player not registered');
 
-        if (!playerName) {
-          throw new Error('Player not registered');
-        }
-
-        // Join room via RoomManager
         const room = roomManager.joinRoom(roomId, socket.id, playerName);
-
-        // Join socket to room
         socket.join(roomId);
-
+        room.lastMove = null;
         console.log(`Player ${playerName} joined room: ${roomId}`);
 
-        // Emit game-started event to room with game state
-        const gameState = room.game.serialize();
-        io.to(roomId).emit('game-started', gameState);
+        // 対局開始を部屋の全員へ
+        const state = buildClientState(room);
+        io.to(roomId).emit('game-started', state);
+        io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
 
-        // Get and emit legal moves for current player
-        const legalMoves = getLegalMoves(room.game);
-        io.to(roomId).emit('legal-moves-updated', { legalMoves });
-
-        // ゲーム開始時にターンを開始
         room.game.startTurn();
+        emitRoomsUpdated(io, roomManager, playerNames);
 
-        // Emit rooms-updated to all clients
-        emitRoomsUpdated(io, roomManager);
-
-        // Callback success with game state
-        if (callback) {
-          callback({ success: true, gameState });
-        }
+        if (callback) callback({ success: true, roomId, gameState: state });
       } catch (error) {
-        console.error('Error in join-room event:', error);
-        if (callback) {
-          callback({ success: false, error: error.message });
-        }
+        console.error('join-room error:', error);
+        if (callback) callback({ success: false, error: error.message });
       }
     });
 
-    /**
-     * EVENT: 'place-piece' - Place piece on board
-     *
-     * Place a piece at specified coordinates and execute move
-     */
-    socket.on('place-piece', (roomId, row, col, callback) => {
+    // ---- get-game-state --------------------------------------------------
+    socket.on('get-game-state', (payload, callback) => {
       try {
-        // Verify room exists and player is in it
+        const roomId = getRoomId(payload);
         const room = roomManager.getPlayerRoom(socket.id);
-
         if (!room || room.roomId !== roomId) {
-          throw new Error('Invalid room or player not in room');
+          if (callback) callback({});
+          return;
         }
+        const state = buildClientState(room);
+        const legalMoves = room.game ? legalMovesStr(room.game) : [];
+        if (callback) callback({ ...state, legalMoves });
+      } catch (error) {
+        console.error('get-game-state error:', error);
+        if (callback) callback({ error: error.message });
+      }
+    });
 
-        if (room.status !== 'playing') {
-          throw new Error('Game is not in progress');
-        }
+    // ---- place-piece -----------------------------------------------------
+    socket.on('place-piece', (payload, callback) => {
+      try {
+        const { roomId, row, col } = payload || {};
+        const room = roomManager.getPlayerRoom(socket.id);
+        if (!room || room.roomId !== roomId) throw new Error('Invalid room');
+        if (room.status !== 'playing' || !room.game) throw new Error('Game is not in progress');
 
-        // Make the move
-        const gameState = roomManager.makeMove(roomId, row, col);
+        // 手番チェック（自分の番以外は弾く）
+        const myColor = room.host.id === socket.id ? 'black' : 'white';
+        if (room.game.currentPlayer !== myColor) throw new Error('あなたの番ではありません');
 
-        console.log(`Move made in room ${roomId} at [${row}, ${col}]`);
-
-        // Clear timeout for current player and start new timeout for next player
         room.game.clearTurnTimeout();
+        roomManager.makeMove(roomId, row, col);
+        room.lastMove = { row, col };
+        console.log(`Move in ${roomId} at [${row}, ${col}]`);
 
-        // Emit board-updated to room
-        io.to(roomId).emit('board-updated', gameState);
+        const state = buildClientState(room);
+        io.to(roomId).emit('board-updated', state);
+        io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
 
-        // Get legal moves for next player and emit
-        const legalMoves = getLegalMoves(room.game);
-        io.to(roomId).emit('legal-moves-updated', { legalMoves });
-
-        // Start turn for next player
-        if (!room.game.isFinished) {
+        if (room.game.isFinished) {
+          room.status = 'finished';
+          io.to(roomId).emit('game-finished', buildClientState(room));
+        } else {
           room.game.startTurn();
         }
 
-        // Check if game is finished
-        if (room.game.isFinished) {
-          io.to(roomId).emit('game-finished', gameState);
-          room.status = 'finished';
-        }
-
-        // Callback success
-        if (callback) {
-          callback({ success: true });
-        }
+        if (callback) callback({ success: true });
       } catch (error) {
-        console.error('Error in place-piece event:', error);
-        if (callback) {
-          callback({ success: false, error: error.message });
-        }
+        console.error('place-piece error:', error);
+        if (callback) callback({ success: false, error: error.message });
       }
     });
 
-    /**
-     * EVENT: 'resign' - Player resignation
-     *
-     * Player resigns from the game, ending it immediately
-     */
-    socket.on('resign', (roomId, callback) => {
+    // ---- resign ----------------------------------------------------------
+    socket.on('resign', (payload, callback) => {
       try {
-        // Verify room exists and player is in it
+        const roomId = getRoomId(payload);
         const room = roomManager.getPlayerRoom(socket.id);
+        if (!room || room.roomId !== roomId) throw new Error('Invalid room');
 
-        if (!room || room.roomId !== roomId) {
-          throw new Error('Invalid room or player not in room');
-        }
+        // 投了者の相手を勝ちにする
+        const winnerId =
+          room.host.id === socket.id
+            ? room.guest && room.guest.id
+            : room.host.id;
+        room.resignWinnerId = winnerId || null;
+        if (room.game) room.game.clearTurnTimeout();
+        roomManager.finishGame(roomId);
+        console.log(`Player ${socket.id} resigned from ${roomId}`);
 
-        // Finish the game
-        const gameState = roomManager.finishGame(roomId);
-
-        console.log(`Player ${socket.id} resigned from room ${roomId}`);
-
-        // Emit game-finished to room
-        io.to(roomId).emit('game-finished', gameState);
-
-        // Callback success
-        if (callback) {
-          callback({ success: true });
-        }
+        io.to(roomId).emit('game-finished', buildClientState(room));
+        if (callback) callback({ success: true });
       } catch (error) {
-        console.error('Error in resign event:', error);
-        if (callback) {
-          callback({ success: false, error: error.message });
-        }
+        console.error('resign error:', error);
+        if (callback) callback({ success: false, error: error.message });
       }
     });
 
-    /**
-     * EVENT: 'leave-room' - Leave room
-     *
-     * Player leaves the room (for waiting rooms or after game ends)
-     */
-    socket.on('leave-room', (roomId, callback) => {
+    // ---- leave-room ------------------------------------------------------
+    socket.on('leave-room', (payload, callback) => {
       try {
-        // Leave socket room
+        const roomId = getRoomId(payload);
         socket.leave(roomId);
-
-        // Leave game room in RoomManager
         roomManager.leaveRoom(roomId);
-
-        console.log(`Player ${socket.id} left room ${roomId}`);
-
-        // Emit rooms-updated to all clients
-        emitRoomsUpdated(io, roomManager);
-
-        // Callback success
-        if (callback) {
-          callback({ success: true });
-        }
+        console.log(`Player ${socket.id} left ${roomId}`);
+        emitRoomsUpdated(io, roomManager, playerNames);
+        if (callback) callback({ success: true });
       } catch (error) {
-        console.error('Error in leave-room event:', error);
-        if (callback) {
-          callback({ success: false, error: error.message });
-        }
+        console.error('leave-room error:', error);
+        if (callback) callback({ success: false, error: error.message });
       }
     });
 
-    /**
-     * EVENT: 'disconnect' - Player disconnect
-     *
-     * Handle player disconnection - clean up room and notify others
-     */
+    // ---- disconnect ------------------------------------------------------
     socket.on('disconnect', () => {
       try {
         console.log(`User disconnected: ${socket.id}`);
-
-        // Check if player was in a game
         const room = roomManager.getPlayerRoom(socket.id);
-
         if (room && room.status === 'playing') {
-          // Notify opponent of disconnection
           io.to(room.roomId).emit('opponent-disconnected');
-
-          // Clean up room
           roomManager.leaveRoom(room.roomId);
         } else if (room) {
-          // Clean up waiting room
           roomManager.leaveRoom(room.roomId);
         }
-
-        // Remove player name
         playerNames.delete(socket.id);
-
-        // Emit online count update
-        const onlineCount = playerNames.size;
-        io.emit('online-count-updated', { onlineCount });
-
-        // Emit rooms-updated to all clients
-        emitRoomsUpdated(io, roomManager);
+        io.emit('online-count-updated', { onlineCount: playerNames.size });
+        emitRoomsUpdated(io, roomManager, playerNames);
       } catch (error) {
-        console.error('Error in disconnect event:', error);
+        console.error('disconnect error:', error);
       }
     });
   });
 }
 
-/**
- * Helper function to emit updated room lists to all clients
- * @param {Server} io - Socket.io server instance
- * @param {RoomManager} roomManager - Room manager instance
- */
-function emitRoomsUpdated(io, roomManager) {
-  const waitingRooms = roomManager.getWaitingRooms().map(room => ({
+// 募集中/対戦中/オンライン人数をまとめる
+function buildRoomsPayload(roomManager, playerNames) {
+  const waiting = roomManager.getWaitingRooms().map((room) => ({
     roomId: room.roomId,
-    hostName: room.host.name
+    hostName: room.host.name,
   }));
-
-  const playingRooms = roomManager.getPlayingRooms().map(room => ({
+  const playing = roomManager.getPlayingRooms().map((room) => ({
     player1: room.host.name,
-    player2: room.guest ? room.guest.name : 'Waiting...'
+    player2: room.guest ? room.guest.name : 'Waiting...',
   }));
+  return { waiting, playing, onlineCount: playerNames.size };
+}
 
-  io.emit('rooms-updated', {
-    waiting: waitingRooms,
-    playing: playingRooms
-  });
+function emitRoomsUpdated(io, roomManager, playerNames) {
+  io.emit('rooms-updated', buildRoomsPayload(roomManager, playerNames));
 }
 
 module.exports = registerSocketHandlers;

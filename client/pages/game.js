@@ -139,6 +139,9 @@ export default function GamePage() {
 
   const isPlaying = gameState.gameState === 'playing';
   const isFinished = gameState.gameState === 'finished';
+  // 自分の手番のときだけ合法手を表示・着手可能にする（相手の番に誤タップさせない）
+  const myTurn = isPlaying && socket && gameState.currentPlayer === socket.id;
+  const shownLegalMoves = myTurn ? legalMoves : [];
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -162,6 +165,19 @@ export default function GamePage() {
         currentPlayer={gameState.currentPlayer}
       />
 
+      {/* Turn indicator */}
+      {isPlaying && (
+        <div className="text-center mt-2">
+          <span
+            className={`inline-block text-sm font-bold rounded-full px-4 py-1 ${
+              myTurn ? 'bg-yellow-300 text-purple-900' : 'bg-black/30 text-white'
+            }`}
+          >
+            {myTurn ? 'あなたの番です' : '相手の番です…'}
+          </span>
+        </div>
+      )}
+
       {/* Timer (only show during playing) */}
       {isPlaying && (
         <Timer
@@ -176,7 +192,7 @@ export default function GamePage() {
       {/* Board */}
       <Board
         board={gameState.board}
-        legalMoves={legalMoves}
+        legalMoves={shownLegalMoves}
         lastMove={gameState.lastMove}
         onCellClick={handleCellClick}
       />

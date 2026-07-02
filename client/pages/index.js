@@ -21,7 +21,8 @@ export default function TitleScreen() {
     setConnected(socket.connected);
     const handleConnect = () => setConnected(true);
     const handleDisconnect = () => setConnected(false);
-    const handleCount = (count) => setOnlineCount(count);
+    const handleCount = (data) =>
+      setOnlineCount(typeof data === 'number' ? data : data?.onlineCount ?? 0);
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
