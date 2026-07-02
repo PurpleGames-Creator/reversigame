@@ -20,9 +20,9 @@ const YOU = { id: 'you', name: 'あなた' };
 const CPU = { id: 'papuko', name: 'パプ子' };
 
 const DIFFICULTIES = [
-  { key: 'easy', label: 'よわい', desc: 'ランダムに打つ。まず慣れたい人に', dot: '#34d399' },
-  { key: 'normal', label: 'ふつう', desc: '角をねらってそこそこ強い', dot: '#a78bfa' },
-  { key: 'hard', label: 'つよい', desc: '数手先まで読む本気のパプ子', dot: '#fbbf24' },
+  { key: 'easy', label: 'よわい', desc: '位置を考えて打つ。腕試しの入門に', dot: '#34d399' },
+  { key: 'normal', label: 'ふつう', desc: '数手先を読んでくる', dot: '#a78bfa' },
+  { key: 'hard', label: 'つよい', desc: 'さらに深く読む本気のパプ子', dot: '#fbbf24' },
 ];
 
 // 人間 = 白(先手), パプ子 = 紫(後手)

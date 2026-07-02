@@ -106,39 +106,24 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// CPUの着手を決める。戻り値 { row, col } または null（打てない＝パス）
-export function chooseMove(board, color, difficulty = 'normal') {
-  const moves = getLegalMoves(board, color);
-  if (moves.length === 0) return null;
-
-  // よわい: 完全ランダム
-  if (difficulty === 'easy') {
-    return parseMove(pickRandom(moves));
-  }
-
-  // ふつう: 1手先の位置評価で最善。ときどきブレて人間味を出す。
-  if (difficulty === 'normal') {
-    if (Math.random() < 0.2) {
-      return parseMove(pickRandom(moves));
+// 1手先の位置評価で最善手を選ぶ（軽量）
+function greedyBest(board, color, moves) {
+  let best = null;
+  let bestScore = -Infinity;
+  for (const m of moves) {
+    const { row, col } = parseMove(m);
+    const next = applyMove(board, row, col, color);
+    const score = evaluate(next, color);
+    if (score > bestScore) {
+      bestScore = score;
+      best = { row, col };
     }
-    let best = null;
-    let bestScore = -Infinity;
-    for (const m of moves) {
-      const { row, col } = parseMove(m);
-      const next = applyMove(board, row, col, color);
-      const score = evaluate(next, color);
-      if (score > bestScore) {
-        bestScore = score;
-        best = { row, col };
-      }
-    }
-    return best;
   }
+  return best;
+}
 
-  // つよい: αβ探索。終盤は深く読む。
-  const empties = countEmpty(board);
-  const depth = empties <= 10 ? empties : 4;
-
+// αβ探索で最善手を選ぶ
+function searchBest(board, color, moves, depth) {
   let best = null;
   let bestScore = -Infinity;
   let alpha = -Infinity;
@@ -156,4 +141,29 @@ export function chooseMove(board, color, difficulty = 'normal') {
     alpha = Math.max(alpha, bestScore);
   }
   return best;
+}
+
+// CPUの着手を決める。戻り値 { row, col } または null（打てない＝パス）
+// よわい: 1手先の位置評価（ときどきブレる）／ふつう: αβ深さ2／つよい: αβ深さ4＋終盤読み切り
+export function chooseMove(board, color, difficulty = 'normal') {
+  const moves = getLegalMoves(board, color);
+  if (moves.length === 0) return null;
+
+  // よわい: 位置評価ベース。少しだけブレて人間味を出す。
+  if (difficulty === 'easy') {
+    if (Math.random() < 0.15) return parseMove(pickRandom(moves));
+    return greedyBest(board, color, moves);
+  }
+
+  const empties = countEmpty(board);
+
+  // ふつう: 数手先を読む（終盤は読み切り）
+  if (difficulty === 'normal') {
+    const depth = empties <= 10 ? empties : 2;
+    return searchBest(board, color, moves, depth);
+  }
+
+  // つよい: さらに深く読む
+  const depth = empties <= 10 ? empties : 4;
+  return searchBest(board, color, moves, depth);
 }

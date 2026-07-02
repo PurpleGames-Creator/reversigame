@@ -108,7 +108,7 @@ export default function TitleScreen() {
                   disabled={!playerName.trim() || loading}
                   className="btn btn-violet w-full py-3.5 text-base"
                 >
-                  {loading ? '接続中…' : 'マッチングへ'}
+                  {loading ? '接続中…' : '待機ロビーへ'}
                 </button>
                 {loading && !connected && (
                   <p className="text-xs text-white/60 text-center leading-relaxed">
