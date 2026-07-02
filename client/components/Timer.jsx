@@ -8,36 +8,43 @@ export default function Timer({ isActive, onTimeUp, initialTime = 20 }) {
       setTimeLeft(initialTime);
       return;
     }
-
     if (timeLeft === 0) {
       onTimeUp();
       return;
     }
-
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
-
     return () => clearInterval(timer);
   }, [isActive, timeLeft, initialTime, onTimeUp]);
 
-  // Reset timeLeft when initialTime changes
   useEffect(() => {
-    if (!isActive) {
-      setTimeLeft(initialTime);
-    }
+    if (!isActive) setTimeLeft(initialTime);
   }, [initialTime, isActive]);
 
-  const bgColor = timeLeft <= 5 ? 'bg-red-500' : 'bg-blue-500';
+  const urgent = timeLeft <= 5;
+  const pct = Math.max(0, Math.min(1, timeLeft / initialTime));
 
   return (
-    <div className={`${bgColor} text-white text-4xl font-bold text-center rounded-lg padding-4 mx-4 mt-2 py-4 transition-colors`}>
-      {timeLeft}秒
+    <div className="mx-auto mt-3 w-40">
+      <div className="flex items-baseline justify-center gap-1">
+        <span
+          className={`text-2xl font-bold tabular-nums transition-colors ${
+            urgent ? 'text-rose-300' : 'text-white'
+          }`}
+        >
+          {timeLeft}
+        </span>
+        <span className="text-xs text-white/50">秒</span>
+      </div>
+      <div className="mt-1.5 h-1 w-full rounded-full bg-white/12 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-1000 ease-linear ${
+            urgent ? 'bg-rose-400' : 'bg-violet-300'
+          }`}
+          style={{ width: `${pct * 100}%` }}
+        />
+      </div>
     </div>
   );
 }

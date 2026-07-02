@@ -1,36 +1,59 @@
 import Image from 'next/image';
 
 // パプ子（パプ太郎＋リボン）マスコット。Purple Games 共通キャラ。
-// size: 画像の一辺(px)。float: 上下にふわふわ浮かせる。
-export default function Papuko({ size = 140, float = false, className = '' }) {
+// size: 画像の一辺(px)。float: ふわふわ浮遊。glow: 背後に柔らかな光。
+export default function Papuko({ size = 140, float = false, glow = false, className = '' }) {
   return (
     <div
-      className={`relative inline-block ${float ? 'papuko-float' : ''} ${className}`}
+      className={`relative inline-flex items-center justify-center ${className}`}
       style={{ width: size, height: size }}
     >
-      <Image
-        src="/paputaro.png"
-        alt="パプ子"
-        width={size}
-        height={size}
-        priority
-        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-      />
-      {/* リボン */}
-      <span
-        className="absolute select-none"
-        style={{
-          top: -size * 0.06,
-          left: '50%',
-          transform: 'translateX(-30%)',
-          fontSize: size * 0.34,
-          lineHeight: 1,
-          filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.25))',
-        }}
-        aria-hidden="true"
+      {glow && (
+        <span
+          aria-hidden="true"
+          className="absolute rounded-full"
+          style={{
+            width: size * 1.5,
+            height: size * 1.5,
+            background:
+              'radial-gradient(circle, rgba(167,139,250,0.55) 0%, rgba(124,58,237,0.15) 45%, transparent 70%)',
+            filter: 'blur(6px)',
+          }}
+        />
+      )}
+      <div
+        className={`relative ${float ? 'papuko-float' : ''}`}
+        style={{ width: size, height: size }}
       >
-        🎀
-      </span>
+        <Image
+          src="/paputaro.png"
+          alt="パプ子"
+          width={size}
+          height={size}
+          priority
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            filter: 'drop-shadow(0 12px 20px rgba(20,4,45,0.45))',
+          }}
+        />
+        {/* リボン */}
+        <span
+          className="absolute select-none"
+          style={{
+            top: -size * 0.05,
+            left: '50%',
+            transform: 'translateX(-28%)',
+            fontSize: size * 0.32,
+            lineHeight: 1,
+            filter: 'drop-shadow(0 2px 3px rgba(20,4,45,0.35))',
+          }}
+          aria-hidden="true"
+        >
+          🎀
+        </span>
+      </div>
     </div>
   );
 }

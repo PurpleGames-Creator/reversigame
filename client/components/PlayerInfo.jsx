@@ -1,35 +1,45 @@
 export default function PlayerInfo({ player1, player2, currentPlayer }) {
+  const Side = ({ player, color }) => {
+    const active = currentPlayer === player?.id;
+    const isWhite = color === 'white';
+    return (
+      <div
+        className={`flex-1 rounded-2xl px-3 py-3 text-center transition-all duration-300 ${
+          active ? 'bg-white/12 ring-1 ring-white/40' : 'bg-white/0'
+        }`}
+      >
+        <div className="flex items-center justify-center gap-2 mb-1.5">
+          <span
+            className="inline-block rounded-full"
+            style={{
+              width: 12,
+              height: 12,
+              background: isWhite
+                ? 'radial-gradient(circle at 30% 30%, #fff, #d7cff0)'
+                : 'radial-gradient(circle at 30% 30%, #a78bfa, #6d28d9)',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+            }}
+          />
+          <p className="text-[11px] font-semibold tracking-wide text-white/55">
+            {isWhite ? '白' : '紫'}
+          </p>
+        </div>
+        <p className="text-sm font-semibold text-white truncate">
+          {player?.name || '待機中'}
+        </p>
+        <p className="text-3xl font-bold text-white mt-0.5 tabular-nums">
+          {player?.pieces ?? 0}
+        </p>
+      </div>
+    );
+  };
+
   return (
-    <div className="bg-white shadow-md rounded-lg p-6 mx-4 mt-4">
-      <div className="flex items-center justify-between gap-4">
-        {/* Player 1 (White) */}
-        <div className={`flex-1 text-center transition-colors ${
-          currentPlayer === player1?.id ? 'bg-yellow-100 p-3 rounded-lg' : ''
-        }`}>
-          <p className="text-sm font-medium text-gray-600">白</p>
-          <p className="text-lg font-bold text-gray-800 mb-2">
-            {player1?.name || '待機中'}
-          </p>
-          <p className="text-2xl font-bold text-white bg-gray-400 rounded px-3 py-1 inline-block">
-            {player1?.pieces || 0}
-          </p>
-        </div>
-
-        {/* VS */}
-        <div className="text-gray-400 font-bold text-2xl">VS</div>
-
-        {/* Player 2 (Purple) */}
-        <div className={`flex-1 text-center transition-colors ${
-          currentPlayer === player2?.id ? 'bg-yellow-100 p-3 rounded-lg' : ''
-        }`}>
-          <p className="text-sm font-medium text-gray-600">紫</p>
-          <p className="text-lg font-bold text-gray-800 mb-2">
-            {player2?.name || '待機中'}
-          </p>
-          <p className="text-2xl font-bold text-white bg-purple-500 rounded px-3 py-1 inline-block">
-            {player2?.pieces || 0}
-          </p>
-        </div>
+    <div className="glass rounded-3xl p-2 mx-4 mt-4">
+      <div className="flex items-center gap-1">
+        <Side player={player1} color="white" />
+        <span className="text-white/35 font-medium text-xs px-1">VS</span>
+        <Side player={player2} color="purple" />
       </div>
     </div>
   );
