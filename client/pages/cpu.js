@@ -7,6 +7,7 @@ import Papuko from '../components/Papuko';
 import {
   createInitialBoard,
   getLegalMoves,
+  getFlips,
   applyMove,
   evaluateStatus,
   countPieces,
@@ -15,6 +16,7 @@ import {
   PURPLE,
 } from '../lib/reversi';
 import { chooseMove } from '../lib/ai';
+import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 
 const YOU = { id: 'you', name: 'あなた' };
 const CPU = { id: 'papuko', name: 'パプ子' };
@@ -38,6 +40,7 @@ export default function CpuGame() {
   const [message, setMessage] = useState(null);
 
   const startGame = useCallback((diff) => {
+    unlockAudio();
     setDifficulty(diff);
     setBoard(createInitialBoard());
     setTurn(WHITE);
@@ -78,8 +81,11 @@ export default function CpuGame() {
         const mv = chooseMove(board, PURPLE, difficulty);
         if (mv) {
           setMessage(null);
+          const flipped = getFlips(board, mv.row, mv.col, PURPLE).length;
           setBoard((b) => applyMove(b, mv.row, mv.col, PURPLE));
           setLastMove(mv);
+          playPlace();
+          playFlips(flipped);
         }
         setThinking(false);
         setTurn(WHITE);
@@ -92,8 +98,11 @@ export default function CpuGame() {
     if (phase !== 'playing' || turn !== WHITE || thinking) return;
     if (getLegalMoves(board, WHITE).indexOf(`${row},${col}`) === -1) return;
     setMessage(null);
+    const flipped = getFlips(board, row, col, WHITE).length;
     setBoard((b) => applyMove(b, row, col, WHITE));
     setLastMove({ row, col });
+    playPlace();
+    playFlips(flipped);
     setTurn(PURPLE);
   };
 

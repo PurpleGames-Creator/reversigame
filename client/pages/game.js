@@ -1,10 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { initSocket } from '../lib/socket';
 import Board from '../components/Board';
 import PlayerInfo from '../components/PlayerInfo';
 import Timer from '../components/Timer';
+import { playPlace, playFlips, unlockAudio } from '../lib/sound';
+
+// 2つの盤面で色が変わったマス数を数える（＝置いた1手＋裏返った枚数）
+function countChanged(prev, next) {
+  if (!prev || !next) return 0;
+  let n = 0;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++) if (prev[r][c] !== next[r][c]) n++;
+  return n;
+}
 
 export default function GamePage() {
   const router = useRouter();
@@ -13,8 +23,16 @@ export default function GamePage() {
   const [legalMoves, setLegalMoves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const prevBoardRef = useRef(null);
 
   const socket = initSocket();
+
+  // 観戦側もどこかを触れば音が有効化されるように
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
 
   useEffect(() => {
     if (!roomId) return;
@@ -25,10 +43,18 @@ export default function GamePage() {
     setLoading(true);
 
     const handleGameStarted = (data) => {
+      prevBoardRef.current = data.board;
       setGameState(data);
       setLoading(false);
     };
     const handleBoardUpdated = (data) => {
+      // 前の盤面と比べて置いた＋裏返った音を鳴らす
+      const changed = countChanged(prevBoardRef.current, data.board);
+      prevBoardRef.current = data.board;
+      if (changed > 0) {
+        playPlace();
+        playFlips(changed - 1);
+      }
       setGameState((prev) => ({
         ...prev,
         board: data.board,
@@ -40,6 +66,12 @@ export default function GamePage() {
     };
     const handleLegalMovesUpdated = (data) => setLegalMoves(data.legalMoves || []);
     const handleGameFinished = (data) => {
+      const changed = countChanged(prevBoardRef.current, data.board);
+      prevBoardRef.current = data.board;
+      if (changed > 0) {
+        playPlace();
+        playFlips(changed - 1);
+      }
       setGameState((prev) => ({
         ...prev,
         gameState: 'finished',
@@ -59,6 +91,7 @@ export default function GamePage() {
 
     socket.emit('get-game-state', { roomId }, (data) => {
       if (data && data.board) {
+        prevBoardRef.current = data.board;
         setGameState(data);
         setLegalMoves(data.legalMoves || []);
         setLoading(false);
@@ -75,6 +108,7 @@ export default function GamePage() {
   }, [roomId, socket, router]);
 
   const handleCellClick = (row, col) => {
+    unlockAudio();
     setLoading(true);
     socket.emit('place-piece', { roomId, row, col }, (response) => {
       setLoading(false);
