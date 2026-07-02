@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { initSocket } from '../lib/socket';
@@ -13,6 +13,14 @@ export default function TitleScreen() {
   const [showOnline, setShowOnline] = useState(false);
   const [connected, setConnected] = useState(false);
   const socket = initSocket();
+  const inputRef = useRef(null);
+
+  // キーボードで隠れないよう、フォーカス時に入力欄を見える位置へスクロール
+  const handleInputFocus = () => {
+    setTimeout(() => {
+      inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 300);
+  };
 
   useEffect(() => {
     const savedName = getPlayerName();
@@ -55,7 +63,11 @@ export default function TitleScreen() {
   return (
     <>
       <Head><title>Purple Reversi</title></Head>
-      <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
+      <main
+        className={`min-h-screen [min-height:100dvh] flex flex-col items-center px-6 ${
+          showOnline ? 'justify-start pt-14 pb-[60vh]' : 'justify-center py-12'
+        }`}
+      >
         <div className="w-full max-w-sm flex flex-col items-center">
           {/* マスコット */}
           <div className="animate-rise">
@@ -93,10 +105,12 @@ export default function TitleScreen() {
             ) : (
               <div className="glass rounded-3xl p-4 space-y-3 animate-rise">
                 <input
+                  ref={inputRef}
                   type="text"
                   value={playerName}
                   onChange={(e) => setLocalPlayerName(e.target.value)}
                   onKeyPress={handleKeyPress}
+                  onFocus={handleInputFocus}
                   placeholder="プレイヤー名を入力"
                   maxLength="20"
                   disabled={loading}
