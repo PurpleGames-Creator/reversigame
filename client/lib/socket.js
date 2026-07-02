@@ -5,7 +5,7 @@ let socket = null;
 export const initSocket = () => {
   if (!socket) {
     const SOCKET_URL =
-      process.env.NEXT_PUBLIC_SOCKET_URL || 'https://purple-reversi.up.railway.app';
+      process.env.NEXT_PUBLIC_SOCKET_URL || 'https://purple-reversi.onrender.com';
     socket = io(SOCKET_URL, {
       reconnection: true,
     });

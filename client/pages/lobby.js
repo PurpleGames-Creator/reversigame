@@ -75,7 +75,7 @@ export default function LobbyPage() {
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* ヘッダー */}
-      <header className="sticky top-0 z-10 bg-blue-600 text-white py-4 px-4 shadow-sm">
+      <header className="sticky top-0 z-10 bg-purple-700 text-white py-4 px-4 shadow-sm">
         <div className="flex items-center justify-between">
           <button
             onClick={() => router.push('/')}

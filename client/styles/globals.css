@@ -56,7 +56,16 @@ button {
   }
 }
 
+@keyframes papukoFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
 /* Animation classes */
+.papuko-float {
+  animation: papukoFloat 2.8s ease-in-out infinite;
+}
+
 .piece-fade-in {
   animation: fadeIn 0.3s ease-in;
 }

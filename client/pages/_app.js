@@ -9,7 +9,7 @@ function MyApp({ Component, pageProps }) {
   useEffect(() => {
     if (!globalSocket) {
       const SOCKET_URL =
-        process.env.NEXT_PUBLIC_SOCKET_URL || 'https://purple-reversi.up.railway.app';
+        process.env.NEXT_PUBLIC_SOCKET_URL || 'https://purple-reversi.onrender.com';
       globalSocket = io(SOCKET_URL, {
         reconnection: true,
       });
