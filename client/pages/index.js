@@ -240,26 +240,26 @@ export default function TitleScreen() {
 
       <main
         className={`min-h-screen [min-height:100dvh] flex flex-col items-center px-6 ${
-          inputsOpen ? 'justify-start pt-14 pb-[60vh]' : 'justify-center py-12'
+          inputsOpen ? 'justify-start pt-14 pb-[60vh]' : 'justify-center py-8'
         }`}
       >
         <div className="w-full max-w-sm flex flex-col items-center">
           {/* マスコット＋背景のリバーシ盤 */}
-          <div className="relative animate-rise" style={{ width: 300, height: 300 }}>
+          <div className="relative animate-rise" style={{ width: 200, height: 200 }}>
             <div className="absolute inset-0 flex items-center justify-center">
-              <BoardBackdrop size={300} />
+              <BoardBackdrop size={200} />
             </div>
             <div className="absolute inset-0 flex items-center justify-center">
-              <Papuko size={156} float glow />
+              <Papuko size={104} float glow />
             </div>
           </div>
 
           {/* タイトル */}
-          <p className="eyebrow text-[11px] mt-8 mb-3 animate-rise delay-1">Purple Games</p>
-          <h1 className="wordmark text-5xl text-white text-center animate-rise delay-1">
+          <p className="eyebrow text-[11px] mt-5 mb-2.5 animate-rise delay-1">Purple Games</p>
+          <h1 className="wordmark text-[2.5rem] leading-none text-white text-center animate-rise delay-1">
             Purple Reversi
           </h1>
-          <p className="mt-3 mb-10 text-[15px] text-white/70 flex items-center gap-2 animate-rise delay-2">
+          <p className="mt-2.5 mb-7 text-[15px] text-white/70 flex items-center gap-2 animate-rise delay-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
             {onlineCount}人がオンライン
           </p>
