@@ -124,7 +124,7 @@ export default function CpuGame() {
             <h1 className="wordmark text-3xl text-white mt-6 animate-rise delay-1">
               パプ子と対戦
             </h1>
-            <p className="text-white/55 mt-2 mb-8 text-sm animate-rise delay-1">
+            <p className="text-white/70 mt-2 mb-8 text-sm animate-rise delay-1">
               難易度をえらんでください
             </p>
 
@@ -166,31 +166,40 @@ export default function CpuGame() {
   return (
     <>
       <Head><title>パプ子と対戦 | Purple Reversi</title></Head>
-      <div className="flex flex-col h-screen [height:100dvh]">
-        <PlayerInfo
-          player1={{ ...YOU, pieces: whiteCount }}
-          player2={{ ...CPU, pieces: purpleCount }}
-          currentPlayer={turn === WHITE ? YOU.id : CPU.id}
-        />
+      <div className="flex flex-col h-screen [height:100dvh] lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-10">
+        {/* 情報パネル（モバイル: 上部 / lg以上: 左サイド） */}
+        <div className="flex flex-col shrink-0 lg:w-[22rem]">
+          <PlayerInfo
+            player1={{ ...YOU, pieces: whiteCount }}
+            player2={{ ...CPU, pieces: purpleCount }}
+            currentPlayer={turn === WHITE ? YOU.id : CPU.id}
+          />
 
-        <div className="text-center mt-3 h-8 flex items-center justify-center">
-          {message ? (
-            <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
-              {message}
-            </span>
-          ) : thinking ? (
-            <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
-              パプ子が考え中…
-            </span>
-          ) : !isFinished ? (
-            <span
-              className={`text-sm font-semibold rounded-full px-4 py-1.5 ${
-                turn === WHITE ? 'bg-white text-violet-800' : 'text-white/60'
-              }`}
-            >
-              {turn === WHITE ? 'あなたの番' : 'パプ子の番'}
-            </span>
-          ) : null}
+          <div className="text-center mt-3 h-8 flex items-center justify-center">
+            {message ? (
+              <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
+                {message}
+              </span>
+            ) : thinking ? (
+              <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
+                パプ子が考え中…
+              </span>
+            ) : !isFinished ? (
+              <span
+                className={`text-sm font-semibold rounded-full px-4 py-1.5 ${
+                  turn === WHITE ? 'bg-white text-violet-800' : 'text-white/75'
+                }`}
+              >
+                {turn === WHITE ? 'あなたの番' : 'パプ子の番'}
+              </span>
+            ) : null}
+          </div>
+
+          <div className="hidden lg:block px-4 mt-8">
+            <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
+              対局をやめる
+            </button>
+          </div>
         </div>
 
         <Board
@@ -201,7 +210,7 @@ export default function CpuGame() {
           finished={isFinished}
         />
 
-        <div className="px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
+        <div className="lg:hidden px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
           <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
             対局をやめる
           </button>

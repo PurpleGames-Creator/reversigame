@@ -20,7 +20,7 @@ export default function PlayerInfo({ player1, player2, currentPlayer }) {
               boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
             }}
           />
-          <p className="text-[11px] font-semibold tracking-wide text-white/55">
+          <p className="text-[11px] font-semibold tracking-wide text-white/70">
             {isWhite ? '白' : '紫'}
           </p>
         </div>
@@ -38,7 +38,7 @@ export default function PlayerInfo({ player1, player2, currentPlayer }) {
     <div className="glass rounded-3xl p-2 mx-4 mt-4">
       <div className="flex items-center gap-1">
         <Side player={player1} color="white" />
-        <span className="text-white/35 font-medium text-xs px-1">VS</span>
+        <span className="text-white/50 font-medium text-xs px-1">VS</span>
         <Side player={player2} color="purple" />
       </div>
     </div>

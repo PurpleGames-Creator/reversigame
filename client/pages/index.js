@@ -341,7 +341,7 @@ export default function TitleScreen() {
                 <LockIcon size={15} />
                 友達と<span className="font-bold">同じあいことば</span>を入れて対戦
               </p>
-              <p className="text-[11px] text-white/50 leading-relaxed text-center">
+              <p className="text-[11px] text-white/65 leading-relaxed text-center">
                 招待リンクを送れば、相手はあいことば入力なしで参加できます
               </p>
               <input

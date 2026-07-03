@@ -34,7 +34,7 @@ export default function Timer({ deadline, totalMs = 20000 }) {
         >
           {seconds}
         </span>
-        <span className="text-xs text-white/50">秒</span>
+        <span className="text-xs text-white/70">秒</span>
       </div>
       <div className="mt-1.5 h-1 w-full rounded-full bg-white/12 overflow-hidden">
         <div

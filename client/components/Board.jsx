@@ -26,7 +26,9 @@ export default function Board({ board, legalMoves, lastMove, onCellClick, finish
       <div
         className="relative rounded-3xl p-2.5 w-full"
         style={{
-          maxWidth: 'min(92vw, 460px)',
+          // 幅・高さ両方に収まる最大サイズ（iPad/PCでは560pxまで拡大、
+          // 高さの低い画面では74vhで頭打ちにしてはみ出しを防ぐ）
+          maxWidth: 'min(92vw, 74vh, 560px)',
           aspectRatio: '1 / 1',
           background: 'linear-gradient(160deg, #241a3d 0%, #1a1130 100%)',
           border: '1px solid rgba(255,255,255,0.10)',

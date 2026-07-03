@@ -312,71 +312,91 @@ export default function GamePage() {
       ? gameState.player1?.name
       : gameState.player2?.name;
 
+  // 操作ボタン（モバイルは盤の下・PC横並び時は左パネル内に表示）
+  const actionButtons = isSpectator ? (
+    <button onClick={handleExitSpectate} className="btn btn-glass w-full py-3.5">
+      観戦をやめる
+    </button>
+  ) : isPlaying ? (
+    <button onClick={handleResign} disabled={loading} className="btn btn-glass w-full py-3.5">
+      投了する
+    </button>
+  ) : isFinished ? (
+    <button onClick={handleLeaveRoom} className="btn btn-primary w-full py-3.5">
+      タイトルに戻る
+    </button>
+  ) : null;
+
   return (
     <>
       <Head><title>{isSpectator ? '観戦中' : '対戦中'} | Purple Reversi</title></Head>
-      <div className="flex flex-col h-screen [height:100dvh]">
-        {error && (
-          <div className="glass-light rounded-2xl mx-4 mt-4 px-4 py-3 flex items-center justify-between text-sm text-rose-700">
-            <span>{error}</span>
-            <button onClick={() => setError(null)} className="font-bold text-rose-500 hover:text-rose-700 px-2">
-              ×
-            </button>
-          </div>
-        )}
+      <div className="flex flex-col h-screen [height:100dvh] lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-10">
+        {/* 情報パネル（モバイル: 上部 / lg以上: 左サイド） */}
+        <div className="flex flex-col shrink-0 lg:w-[22rem]">
+          {error && (
+            <div className="glass-light rounded-2xl mx-4 mt-4 px-4 py-3 flex items-center justify-between text-sm text-rose-700">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="font-bold text-rose-500 hover:text-rose-700 px-2">
+                ×
+              </button>
+            </div>
+          )}
 
-        {/* 相手の復帰待ちカウントダウン */}
-        {graceUntil && !error && (
-          <div className="glass rounded-2xl mx-4 mt-4 px-4 py-3 text-center text-sm text-white/90">
-            {graceName || '相手'} の接続が切れました。復帰を待っています…{' '}
-            <GraceCountdown until={graceUntil} /> 秒
-          </div>
-        )}
+          {/* 相手の復帰待ちカウントダウン */}
+          {graceUntil && !error && (
+            <div className="glass rounded-2xl mx-4 mt-4 px-4 py-3 text-center text-sm text-white/90">
+              {graceName || '相手'} の接続が切れました。復帰を待っています…{' '}
+              <GraceCountdown until={graceUntil} /> 秒
+            </div>
+          )}
 
-        <PlayerInfo
-          player1={gameState.player1}
-          player2={gameState.player2}
-          currentPlayer={gameState.currentPlayer}
-        />
+          <PlayerInfo
+            player1={gameState.player1}
+            player2={gameState.player2}
+            currentPlayer={gameState.currentPlayer}
+          />
 
-        {isPlaying && isSpectator && (
-          <div className="text-center mt-3 flex flex-col items-center gap-1.5">
-            <span className="text-[11px] font-semibold tracking-wide text-white/50 bg-white/10 rounded-full px-3 py-1">
-              観戦中
-            </span>
-            {notice ? (
-              <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
-                {notice}
+          {isPlaying && isSpectator && (
+            <div className="text-center mt-3 flex flex-col items-center gap-1.5">
+              <span className="text-[11px] font-semibold tracking-wide text-white/70 bg-white/10 rounded-full px-3 py-1">
+                観戦中
               </span>
-            ) : (
-              <span className="text-sm font-semibold text-white/80">
-                {currentName} の番
-              </span>
-            )}
-            <Timer deadline={deadline} />
-          </div>
-        )}
-
-        {isPlaying && !isSpectator && (
-          <>
-            <div className="text-center mt-3">
               {notice ? (
-                <span className="inline-block text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
+                <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
                   {notice}
                 </span>
               ) : (
-                <span
-                  className={`inline-block text-sm font-semibold rounded-full px-4 py-1.5 transition-colors ${
-                    myTurn ? 'bg-white text-violet-800' : 'text-white/60'
-                  }`}
-                >
-                  {myTurn ? 'あなたの番' : '相手の番…'}
+                <span className="text-sm font-semibold text-white/80">
+                  {currentName} の番
                 </span>
               )}
+              <Timer deadline={deadline} />
             </div>
-            <Timer deadline={deadline} />
-          </>
-        )}
+          )}
+
+          {isPlaying && !isSpectator && (
+            <>
+              <div className="text-center mt-3">
+                {notice ? (
+                  <span className="inline-block text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
+                    {notice}
+                  </span>
+                ) : (
+                  <span
+                    className={`inline-block text-sm font-semibold rounded-full px-4 py-1.5 transition-colors ${
+                      myTurn ? 'bg-white text-violet-800' : 'text-white/75'
+                    }`}
+                  >
+                    {myTurn ? 'あなたの番' : '相手の番…'}
+                  </span>
+                )}
+              </div>
+              <Timer deadline={deadline} />
+            </>
+          )}
+
+          <div className="hidden lg:block px-4 mt-8">{actionButtons}</div>
+        </div>
 
         <Board
           board={gameState.board}
@@ -386,20 +406,8 @@ export default function GamePage() {
           finished={isFinished}
         />
 
-        <div className="px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
-          {isSpectator ? (
-            <button onClick={handleExitSpectate} className="btn btn-glass w-full py-3.5">
-              観戦をやめる
-            </button>
-          ) : isPlaying ? (
-            <button onClick={handleResign} disabled={loading} className="btn btn-glass w-full py-3.5">
-              投了する
-            </button>
-          ) : isFinished ? (
-            <button onClick={handleLeaveRoom} className="btn btn-primary w-full py-3.5">
-              タイトルに戻る
-            </button>
-          ) : null}
+        <div className="lg:hidden px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
+          {actionButtons}
         </div>
 
         {/* 自分の接続が切れた：再接続オーバーレイ */}
