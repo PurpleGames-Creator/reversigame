@@ -27,6 +27,7 @@ export default function TitleScreen() {
   const [matchMode, setMatchMode] = useState('random'); // random | private
   const [spectateOpen, setSpectateOpen] = useState(false);
   const [liveGames, setLiveGames] = useState([]);
+  const [linkCopied, setLinkCopied] = useState(false);
   const socket = initSocket();
 
   // 入力欄がキーボードで隠れないよう、フォーカス時に見える位置へスクロール
@@ -63,6 +64,51 @@ export default function TitleScreen() {
       socket.off('matched', handleMatched);
     };
   }, [socket, router]);
+
+  // 招待リンク（?join=あいことば）で開かれたら、プライベート戦を自動で開いて合言葉を入力
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const join = new URLSearchParams(window.location.search).get('join');
+    if (join) {
+      setPrivateCode(join.trim().slice(0, 32));
+      setPanel('private');
+    }
+  }, []);
+
+  // 招待リンクの URL を組み立てる（現在のパス＝basePath を維持）
+  const buildInviteUrl = (code) => {
+    if (typeof window === 'undefined') return '';
+    const base = window.location.href.split('?')[0].split('#')[0];
+    return `${base}?join=${encodeURIComponent(code)}`;
+  };
+
+  // 招待リンクをクリップボードへコピー（空なら合言葉を自動生成）
+  const handleCopyInvite = async () => {
+    let code = privateCode.trim();
+    if (!code) {
+      code = Math.random().toString(36).slice(2, 8); // 6文字の英数字
+      setPrivateCode(code);
+    }
+    const url = buildInviteUrl(code);
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (e) {
+      window.prompt('このリンクをコピーして友達に送ってください', url);
+    }
+  };
 
   // ランダム対戦
   const handleRandomMatch = () => {
@@ -280,6 +326,9 @@ export default function TitleScreen() {
                   <LockIcon size={14} />
                   友達と<span className="font-bold">同じあいことば</span>を入れて確定すると2人だけで対戦できます
                 </p>
+                <p className="text-[11px] text-white/50 leading-relaxed">
+                  招待リンクを送れば、相手はあいことば入力なしで参加できます
+                </p>
                 <input
                   type="text"
                   value={playerName}
@@ -307,6 +356,14 @@ export default function TitleScreen() {
                   className="btn btn-violet w-full py-3.5 text-base"
                 >
                   {loading ? '接続中…' : '確定'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyInvite}
+                  disabled={loading}
+                  className="btn btn-glass w-full py-2.5 text-sm disabled:opacity-50"
+                >
+                  {linkCopied ? '✓ リンクをコピーしました' : '招待リンクをコピー'}
                 </button>
                 {loading && !connected && (
                   <p className="text-xs text-white/60 text-center leading-relaxed">
