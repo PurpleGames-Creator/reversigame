@@ -227,12 +227,12 @@ export default function CpuGame() {
               <div className="flex justify-center -mt-16 mb-1">
                 <Papuko size={116} glow />
               </div>
-              <h2 className="wordmark text-2xl text-gray-900 mb-1">
+              <h2 className={`wordmark text-2xl text-gray-900 ${winner === 'draw' ? 'mb-1' : 'mb-5'}`}>
                 {winner === 'draw' ? '引き分け' : winner === WHITE ? 'あなたの勝ち' : 'パプ子の勝ち'}
               </h2>
-              <p className="text-gray-500 text-sm mb-5">
-                {winner === PURPLE ? 'また挑戦してね' : winner === 'draw' ? 'いい勝負でした' : ''}
-              </p>
+              {winner === 'draw' && (
+                <p className="text-gray-500 text-sm mb-5">いい勝負でした</p>
+              )}
 
               <div className="flex justify-center gap-10 mb-6">
                 <div>

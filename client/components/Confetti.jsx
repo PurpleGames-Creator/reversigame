@@ -11,7 +11,8 @@ export default function Confetti() {
       const distance = 150 + Math.random() * 100;
       const tx = Math.cos(angle) * distance;
       const ty = Math.sin(angle) * distance;
-      const delay = Math.random() * 100;
+      // 終局カード(modalPop: 0.55s delay + 0.5s)が着地するタイミングで弾けさせる
+      const delay = 900 + Math.random() * 120;
 
       const div = document.createElement('div');
       div.className = 'confetti-item';
