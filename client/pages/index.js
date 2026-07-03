@@ -269,48 +269,38 @@ export default function TitleScreen() {
             {/* パプ子と対戦 */}
             <button
               onClick={() => router.push('/cpu')}
-              className="btn-primary rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-2"
+              className="btn-primary rounded-2xl flex items-center justify-center py-6 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-2"
             >
-              <span className="text-[15px] font-semibold leading-tight">パプ子と対戦</span>
-              <span className="text-[11px] font-medium text-violet-500/80">すぐ遊べる</span>
+              パプ子と対戦
             </button>
 
             {/* ランダム対戦（タップでトグル） */}
             <button
               onClick={() => setPanel(panel === 'random' ? null : 'random')}
-              className={`rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-3 ${
+              className={`rounded-2xl flex items-center justify-center py-6 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-3 ${
                 panel === 'random' ? 'btn-violet' : 'btn-glass'
               }`}
             >
-              <span className="text-[15px] font-semibold leading-tight">ランダム対戦</span>
-              <span className={`text-[11px] font-medium ${panel === 'random' ? 'text-white/80' : 'text-white/55'}`}>
-                だれかと
-              </span>
+              ランダム対戦
             </button>
 
             {/* プライベート戦（タップでトグル） */}
             <button
               onClick={() => setPanel(panel === 'private' ? null : 'private')}
-              className={`rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-3 ${
+              className={`rounded-2xl flex items-center justify-center gap-1.5 py-6 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-3 ${
                 panel === 'private' ? 'btn-violet' : 'btn-glass'
               }`}
             >
-              <span className="flex items-center gap-1.5 text-[15px] font-semibold leading-tight">
-                <LockIcon size={15} />
-                プライベート戦
-              </span>
-              <span className={`text-[11px] font-medium ${panel === 'private' ? 'text-white/80' : 'text-white/55'}`}>
-                あいことば
-              </span>
+              <LockIcon size={15} />
+              プライベート戦
             </button>
 
             {/* 観戦 */}
             <button
               onClick={handleOpenSpectate}
-              className="btn-glass rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-4"
+              className="btn-glass rounded-2xl flex items-center justify-center py-6 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-4"
             >
-              <span className="text-[15px] font-semibold leading-tight">観戦する</span>
-              <span className="text-[11px] font-medium text-white/55">試合を見る</span>
+              観戦する
             </button>
           </div>
 
