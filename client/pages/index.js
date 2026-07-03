@@ -337,11 +337,11 @@ export default function TitleScreen() {
 
           {panel === 'private' && (
             <div className="w-full glass rounded-3xl p-4 space-y-3 mt-3 animate-rise">
-              <p className="text-xs text-white/70 leading-relaxed flex items-center gap-1.5">
-                <LockIcon size={14} />
-                友達と<span className="font-bold">同じあいことば</span>を入れて確定すると2人だけで対戦できます
+              <p className="text-sm text-white/80 leading-relaxed flex items-center justify-center gap-1.5 text-center">
+                <LockIcon size={15} />
+                友達と<span className="font-bold">同じあいことば</span>を入れて対戦
               </p>
-              <p className="text-[11px] text-white/50 leading-relaxed">
+              <p className="text-[11px] text-white/50 leading-relaxed text-center">
                 招待リンクを送れば、相手はあいことば入力なしで参加できます
               </p>
               <input
