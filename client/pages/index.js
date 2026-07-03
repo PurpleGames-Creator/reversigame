@@ -264,124 +264,140 @@ export default function TitleScreen() {
             {onlineCount}人がオンライン
           </p>
 
-          {/* アクション */}
-          <div className="w-full space-y-3">
+          {/* アクション：2×2 グリッド */}
+          <div className="w-full grid grid-cols-2 gap-3">
+            {/* パプ子と対戦 */}
             <button
               onClick={() => router.push('/cpu')}
-              className="btn btn-primary w-full py-4 text-[17px] animate-rise delay-2"
+              className="btn-primary rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-2"
             >
-              パプ子と対戦
+              <span className="text-[15px] font-semibold leading-tight">パプ子と対戦</span>
+              <span className="text-[11px] font-medium text-violet-500/80">すぐ遊べる</span>
             </button>
 
-            {/* ランダム対戦 */}
-            {panel !== 'random' ? (
-              <button
-                onClick={() => setPanel('random')}
-                className="btn btn-glass w-full py-4 text-[17px] animate-rise delay-3"
-              >
-                ランダム対戦
-              </button>
-            ) : (
-              <div className="glass rounded-3xl p-4 space-y-3 animate-rise">
-                <input
-                  type="text"
-                  value={playerName}
-                  onChange={(e) => setLocalPlayerName(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleRandomMatch()}
-                  onFocus={handleFocus}
-                  placeholder="プレイヤー名を入力"
-                  maxLength="20"
-                  disabled={loading}
-                  autoFocus
-                  className="w-full px-4 py-3 rounded-xl bg-white/95 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
-                />
-                <button
-                  onClick={handleRandomMatch}
-                  disabled={!playerName.trim() || loading}
-                  className="btn btn-violet w-full py-3.5 text-base"
-                >
-                  {loading ? '接続中…' : '待機ロビーへ'}
-                </button>
-                {loading && !connected && (
-                  <p className="text-xs text-white/60 text-center leading-relaxed">
-                    サーバーを起こしています…<br />
-                    初回は最大50秒ほどかかります
-                  </p>
-                )}
-              </div>
-            )}
+            {/* ランダム対戦（タップでトグル） */}
+            <button
+              onClick={() => setPanel(panel === 'random' ? null : 'random')}
+              className={`rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-3 ${
+                panel === 'random' ? 'btn-violet' : 'btn-glass'
+              }`}
+            >
+              <span className="text-[15px] font-semibold leading-tight">ランダム対戦</span>
+              <span className={`text-[11px] font-medium ${panel === 'random' ? 'text-white/80' : 'text-white/55'}`}>
+                だれかと
+              </span>
+            </button>
 
-            {/* プライベート戦（合言葉） */}
-            {panel !== 'private' ? (
-              <button
-                onClick={() => setPanel('private')}
-                className="btn btn-glass w-full py-4 text-[17px] flex items-center justify-center gap-2 animate-rise delay-3"
-              >
-                <LockIcon size={17} />
+            {/* プライベート戦（タップでトグル） */}
+            <button
+              onClick={() => setPanel(panel === 'private' ? null : 'private')}
+              className={`rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-3 ${
+                panel === 'private' ? 'btn-violet' : 'btn-glass'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[15px] font-semibold leading-tight">
+                <LockIcon size={15} />
                 プライベート戦
-              </button>
-            ) : (
-              <div className="glass rounded-3xl p-4 space-y-3 animate-rise">
-                <p className="text-xs text-white/70 leading-relaxed flex items-center gap-1.5">
-                  <LockIcon size={14} />
-                  友達と<span className="font-bold">同じあいことば</span>を入れて確定すると2人だけで対戦できます
-                </p>
-                <p className="text-[11px] text-white/50 leading-relaxed">
-                  招待リンクを送れば、相手はあいことば入力なしで参加できます
-                </p>
-                <input
-                  type="text"
-                  value={playerName}
-                  onChange={(e) => setLocalPlayerName(e.target.value)}
-                  onFocus={handleFocus}
-                  placeholder="プレイヤー名を入力"
-                  maxLength="20"
-                  disabled={loading}
-                  className="w-full px-4 py-3 rounded-xl bg-white/95 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
-                />
-                <input
-                  type="text"
-                  value={privateCode}
-                  onChange={(e) => setPrivateCode(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handlePrivateMatch()}
-                  onFocus={handleFocus}
-                  placeholder="あいことば（数字や文字）"
-                  maxLength="32"
-                  disabled={loading}
-                  className="w-full px-4 py-3 rounded-xl bg-white/95 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
-                />
-                <button
-                  onClick={handlePrivateMatch}
-                  disabled={!playerName.trim() || !privateCode.trim() || loading}
-                  className="btn btn-violet w-full py-3.5 text-base"
-                >
-                  {loading ? '接続中…' : '確定'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCopyInvite}
-                  disabled={loading}
-                  className="btn btn-glass w-full py-2.5 text-sm disabled:opacity-50"
-                >
-                  {linkCopied ? '✓ リンクをコピーしました' : '招待リンクをコピー'}
-                </button>
-                {loading && !connected && (
-                  <p className="text-xs text-white/60 text-center leading-relaxed">
-                    サーバーを起こしています…<br />
-                    初回は最大50秒ほどかかります
-                  </p>
-                )}
-              </div>
-            )}
+              </span>
+              <span className={`text-[11px] font-medium ${panel === 'private' ? 'text-white/80' : 'text-white/55'}`}>
+                あいことば
+              </span>
+            </button>
 
             {/* 観戦 */}
             <button
               onClick={handleOpenSpectate}
-              className="btn btn-glass w-full py-3.5 text-[15px] animate-rise delay-4"
+              className="btn-glass rounded-2xl flex flex-col items-center justify-center gap-1 py-6 transition-transform active:scale-[0.97] animate-rise delay-4"
             >
-              観戦する
+              <span className="text-[15px] font-semibold leading-tight">観戦する</span>
+              <span className="text-[11px] font-medium text-white/55">試合を見る</span>
             </button>
           </div>
+
+          {/* 展開パネル：グリッドの下に全幅で表示 */}
+          {panel === 'random' && (
+            <div className="w-full glass rounded-3xl p-4 space-y-3 mt-3 animate-rise">
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setLocalPlayerName(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleRandomMatch()}
+                onFocus={handleFocus}
+                placeholder="プレイヤー名を入力"
+                maxLength="20"
+                disabled={loading}
+                autoFocus
+                className="w-full px-4 py-3 rounded-xl bg-white/95 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
+              />
+              <button
+                onClick={handleRandomMatch}
+                disabled={!playerName.trim() || loading}
+                className="btn btn-violet w-full py-3.5 text-base"
+              >
+                {loading ? '接続中…' : '待機ロビーへ'}
+              </button>
+              {loading && !connected && (
+                <p className="text-xs text-white/60 text-center leading-relaxed">
+                  サーバーを起こしています…<br />
+                  初回は最大50秒ほどかかります
+                </p>
+              )}
+            </div>
+          )}
+
+          {panel === 'private' && (
+            <div className="w-full glass rounded-3xl p-4 space-y-3 mt-3 animate-rise">
+              <p className="text-xs text-white/70 leading-relaxed flex items-center gap-1.5">
+                <LockIcon size={14} />
+                友達と<span className="font-bold">同じあいことば</span>を入れて確定すると2人だけで対戦できます
+              </p>
+              <p className="text-[11px] text-white/50 leading-relaxed">
+                招待リンクを送れば、相手はあいことば入力なしで参加できます
+              </p>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setLocalPlayerName(e.target.value)}
+                onFocus={handleFocus}
+                placeholder="プレイヤー名を入力"
+                maxLength="20"
+                disabled={loading}
+                className="w-full px-4 py-3 rounded-xl bg-white/95 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
+              />
+              <input
+                type="text"
+                value={privateCode}
+                onChange={(e) => setPrivateCode(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handlePrivateMatch()}
+                onFocus={handleFocus}
+                placeholder="あいことば（数字や文字）"
+                maxLength="32"
+                disabled={loading}
+                className="w-full px-4 py-3 rounded-xl bg-white/95 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400 disabled:opacity-50"
+              />
+              <button
+                onClick={handlePrivateMatch}
+                disabled={!playerName.trim() || !privateCode.trim() || loading}
+                className="btn btn-violet w-full py-3.5 text-base"
+              >
+                {loading ? '接続中…' : '確定'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyInvite}
+                disabled={loading}
+                className="btn btn-glass w-full py-2.5 text-sm disabled:opacity-50"
+              >
+                {linkCopied ? '✓ リンクをコピーしました' : '招待リンクをコピー'}
+              </button>
+              {loading && !connected && (
+                <p className="text-xs text-white/60 text-center leading-relaxed">
+                  サーバーを起こしています…<br />
+                  初回は最大50秒ほどかかります
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </>
