@@ -383,6 +383,7 @@ export default function GamePage() {
           legalMoves={shownLegalMoves}
           lastMove={gameState.lastMove}
           onCellClick={handleCellClick}
+          finished={isFinished}
         />
 
         <div className="px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
@@ -417,8 +418,8 @@ export default function GamePage() {
         )}
 
         {isFinished && (
-          <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
-            <div className="glass-light rounded-3xl p-7 max-w-sm w-full text-center animate-rise">
+          <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+            <div className="finish-card glass-light rounded-3xl p-7 max-w-sm w-full text-center">
               <h2 className="wordmark text-2xl text-gray-900 mb-4">対局終了</h2>
 
               {gameState.winner === 'draw' ? (

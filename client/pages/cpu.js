@@ -193,7 +193,13 @@ export default function CpuGame() {
           ) : null}
         </div>
 
-        <Board board={board} legalMoves={humanMoves} lastMove={lastMove} onCellClick={handleCellClick} />
+        <Board
+          board={board}
+          legalMoves={humanMoves}
+          lastMove={lastMove}
+          onCellClick={handleCellClick}
+          finished={isFinished}
+        />
 
         <div className="px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
           <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
@@ -202,8 +208,8 @@ export default function CpuGame() {
         </div>
 
         {isFinished && (
-          <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
-            <div className="glass-light rounded-3xl p-7 max-w-sm w-full text-center animate-rise">
+          <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
+            <div className="finish-card glass-light rounded-3xl p-7 max-w-sm w-full text-center">
               <div className="flex justify-center -mt-16 mb-1">
                 <Papuko size={116} glow />
               </div>

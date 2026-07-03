@@ -160,21 +160,77 @@ input {
   animation: papukoFloat 3.2s ease-in-out infinite;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.piece-fade-in {
-  animation: fadeIn 0.28s ease-in both;
-}
+/* ---------- 石（3Dフリップ） ----------
+   石は白/紫の2面を持つカード構造。盤面値が変わると data-face が切り替わり、
+   rotateY のトランジションで実物のオセロ石のように裏返る。
+   transform のみ＝GPU合成で60fps。裏返る石には Board 側で
+   「置いた石からの距離×52ms」の transition-delay が付き、効果音の
+   カスケード（sound.js: 60ms開始・52ms間隔）と視聴覚が同期する。 */
 
 @keyframes pieceIn {
   0% { transform: scale(0.4); opacity: 0; }
   60% { transform: scale(1.06); }
   100% { transform: scale(1); opacity: 1; }
 }
-.piece-flip {
-  animation: pieceIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+.piece-wrap {
+  perspective: 420px;
+  animation: pieceIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.piece-3d {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.45, 0.05, 0.25, 1.08);
+}
+.piece-3d[data-face='purple'] {
+  transform: rotateY(180deg);
+}
+
+.piece-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.piece-face-white {
+  background: radial-gradient(circle at 32% 28%, #ffffff 0%, #f1eefb 55%, #d7cff0 100%);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35), inset 0 -2px 4px rgba(120, 110, 160, 0.35),
+    inset 0 2px 3px rgba(255, 255, 255, 0.9);
+}
+.piece-face-purple {
+  transform: rotateY(180deg);
+  background: radial-gradient(circle at 32% 28%, #a78bfa 0%, #7c3aed 55%, #5b21b6 100%);
+  box-shadow: 0 3px 8px rgba(30, 8, 60, 0.5), inset 0 -2px 4px rgba(40, 10, 80, 0.5),
+    inset 0 2px 3px rgba(214, 197, 255, 0.55);
+}
+
+/* 終局：石が対角線順に軽く波打つ（Board 側で (row+col)*45ms の delay） */
+@keyframes pieceWave {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-14%); }
+}
+.piece-wave {
+  animation: pieceWave 0.75s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ---------- 終局モーダル（最後の一手の余韻→スプリング入場） ---------- */
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.finish-overlay {
+  animation: overlayIn 0.35s ease 0.5s both;
+}
+@keyframes modalPop {
+  0% { opacity: 0; transform: scale(0.92) translateY(14px); }
+  60% { opacity: 1; transform: scale(1.02) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.finish-card {
+  animation: modalPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.15) 0.55s both;
 }
 
 @keyframes softPulse {
