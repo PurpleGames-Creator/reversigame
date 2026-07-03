@@ -166,8 +166,17 @@ function registerSocketHandlers(io) {
     io.to(room.roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
   };
 
+  // オンライン人数＝接続中の全クライアント数（名前登録の有無を問わない）
+  // io.engine.clientsCount は disconnect ハンドラ時点で未減算のため自前で数える
+  const connectedIds = new Set();
+  const emitOnlineCount = () => {
+    io.emit('online-count-updated', { onlineCount: connectedIds.size });
+  };
+
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
+    connectedIds.add(socket.id);
+    emitOnlineCount();
 
     // ---- register --------------------------------------------------------
     socket.on('register', (playerName, callback) => {
@@ -175,7 +184,6 @@ function registerSocketHandlers(io) {
         playerNames.set(socket.id, playerName);
         console.log(`Player registered: ${socket.id} - ${playerName}`);
         if (callback) callback({ success: true });
-        io.emit('online-count-updated', { onlineCount: playerNames.size });
       } catch (error) {
         console.error('register error:', error);
         if (callback) callback({ success: false, error: error.message });
@@ -185,7 +193,7 @@ function registerSocketHandlers(io) {
     // ---- get-rooms -------------------------------------------------------
     socket.on('get-rooms', (callback) => {
       try {
-        if (callback) callback(buildRoomsPayload(roomManager, playerNames));
+        if (callback) callback(buildRoomsPayload(roomManager, playerNames, connectedIds.size));
       } catch (error) {
         console.error('get-rooms error:', error);
         if (callback) callback({ error: error.message });
@@ -202,7 +210,7 @@ function registerSocketHandlers(io) {
         socket.join(roomId);
         console.log(`Room created: ${roomId} by ${playerName}`);
 
-        emitRoomsUpdated(io, roomManager, playerNames);
+        emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
         if (callback) callback({ roomId, success: true });
       } catch (error) {
         console.error('create-room error:', error);
@@ -242,7 +250,7 @@ function registerSocketHandlers(io) {
 
           io.to(roomId).emit('matched', { roomId });
           startGame(room);
-          emitRoomsUpdated(io, roomManager, playerNames);
+          emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
 
           if (callback) callback({ success: true, matched: true, roomId });
         } else {
@@ -291,7 +299,7 @@ function registerSocketHandlers(io) {
 
           io.to(roomId).emit('matched', { roomId });
           startGame(room);
-          emitRoomsUpdated(io, roomManager, playerNames);
+          emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
 
           if (callback) callback({ success: true, matched: true, roomId });
         } else {
@@ -332,7 +340,7 @@ function registerSocketHandlers(io) {
 
         // 対局開始を部屋の全員へ
         startGame(room);
-        emitRoomsUpdated(io, roomManager, playerNames);
+        emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
 
         if (callback) callback({ success: true, roomId, gameState: buildClientState(room) });
       } catch (error) {
@@ -431,7 +439,7 @@ function registerSocketHandlers(io) {
           room.resignWinnerId = null;
           roomManager.resetGame(roomId);
           startGame(room);
-          emitRoomsUpdated(io, roomManager, playerNames);
+          emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
         }
         if (callback) callback({ success: true });
       } catch (error) {
@@ -533,7 +541,7 @@ function registerSocketHandlers(io) {
         socket.leave(roomId);
         roomManager.leaveRoom(roomId);
         console.log(`Player ${socket.id} left ${roomId}`);
-        emitRoomsUpdated(io, roomManager, playerNames);
+        emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
         if (callback) callback({ success: true });
       } catch (error) {
         console.error('leave-room error:', error);
@@ -583,8 +591,9 @@ function registerSocketHandlers(io) {
           }
         }
         playerNames.delete(socket.id);
-        io.emit('online-count-updated', { onlineCount: playerNames.size });
-        emitRoomsUpdated(io, roomManager, playerNames);
+        connectedIds.delete(socket.id);
+        emitOnlineCount();
+        emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
       } catch (error) {
         console.error('disconnect error:', error);
       }
@@ -593,7 +602,7 @@ function registerSocketHandlers(io) {
 }
 
 // 募集中/対戦中/オンライン人数をまとめる
-function buildRoomsPayload(roomManager, playerNames) {
+function buildRoomsPayload(roomManager, playerNames, onlineCount) {
   const waiting = roomManager.getWaitingRooms().map((room) => ({
     roomId: room.roomId,
     hostName: room.host.name,
@@ -603,11 +612,11 @@ function buildRoomsPayload(roomManager, playerNames) {
     player1: room.host.name,
     player2: room.guest ? room.guest.name : 'Waiting...',
   }));
-  return { waiting, playing, onlineCount: playerNames.size };
+  return { waiting, playing, onlineCount };
 }
 
-function emitRoomsUpdated(io, roomManager, playerNames) {
-  io.emit('rooms-updated', buildRoomsPayload(roomManager, playerNames));
+function emitRoomsUpdated(io, roomManager, playerNames, onlineCount) {
+  io.emit('rooms-updated', buildRoomsPayload(roomManager, playerNames, onlineCount));
 }
 
 module.exports = registerSocketHandlers;

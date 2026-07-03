@@ -259,9 +259,13 @@ export default function TitleScreen() {
           <h1 className="wordmark text-[2.5rem] leading-none text-white text-center animate-rise delay-1">
             Purple Reversi
           </h1>
-          <p className="mt-2.5 mb-7 text-[15px] text-white/70 flex items-center gap-2 animate-rise delay-2">
+          <p className="mt-2.5 text-[15px] text-white/70 flex items-center gap-2 animate-rise delay-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
-            {onlineCount}人がオンライン
+            {/* サーバーは接続中の全クライアント数を配信するので、自分の1人分を引く */}
+            {Math.max(0, onlineCount - 1)}人がオンライン
+          </p>
+          <p className="mt-1 mb-7 text-[11px] text-white/45 animate-rise delay-2">
+            （あなたを除く）
           </p>
 
           {/* アクション：2×2 グリッド */}
