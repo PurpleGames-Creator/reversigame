@@ -105,6 +105,9 @@ class RoomManager {
     if (!room || !room.host || !room.guest) {
       throw new Error('Rematch not available');
     }
+    if (room.game) {
+      room.game.clearTurnTimeout();
+    }
     room.game = new ReversiGame(room.host, room.guest);
     room.status = 'playing';
     return room;
@@ -119,6 +122,11 @@ class RoomManager {
   leaveRoom(roomId) {
     const room = this.rooms.get(roomId);
     if (!room) return;
+
+    // Stop any pending turn timer so the orphaned game can't keep auto-moving
+    if (room.game) {
+      room.game.clearTurnTimeout();
+    }
 
     // Remove player mappings
     if (room.host) {

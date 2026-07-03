@@ -32,6 +32,7 @@ class ReversiGame {
 
     // Timeout management
     this.turnStartTime = null;
+    this.turnDeadline = null;
     this.turnTimeoutId = null;
   }
 
@@ -330,15 +331,19 @@ class ReversiGame {
   }
 
   /**
-   * Start turn timer - schedules auto-move after TURN_TIME_LIMIT
-   * Saves the start time and sets up a timeout
+   * Start turn timer - invokes the callback after TURN_TIME_LIMIT.
+   * The caller (socket layer) decides what to do on timeout so that
+   * clients can be notified of the resulting move.
+   * @param {Function} onTimeout - Called when the current player runs out of time
    */
-  startTurn() {
+  startTurn(onTimeout) {
+    this.clearTurnTimeout();
     this.turnStartTime = Date.now();
-    const turnTime = TURN_TIME_LIMIT;
+    this.turnDeadline = this.turnStartTime + TURN_TIME_LIMIT;
     this.turnTimeoutId = setTimeout(() => {
-      this.autoMove();
-    }, turnTime);
+      this.turnTimeoutId = null;
+      if (onTimeout) onTimeout();
+    }, TURN_TIME_LIMIT);
   }
 
   /**
@@ -353,29 +358,24 @@ class ReversiGame {
   }
 
   /**
-   * Auto-move - automatically place a random legal move or pass turn
-   * Called when turn timer expires
+   * Auto-move - place a random legal move (or pass) for the current player.
+   * Does NOT reschedule the next turn; the caller broadcasts the result
+   * and starts the next timer.
+   * @returns {{ type: 'move', row: number, col: number } | { type: 'pass' }}
    */
   autoMove() {
-    // Get legal moves for current player
     const legalMoves = this.getLegalMoves();
 
     if (legalMoves.length > 0) {
-      // Pick random move
-      const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-      // Make the move
-      this.move(randomMove[0], randomMove[1]);
-    } else {
-      // No legal moves - auto-pass by toggling current player
-      this.currentPlayer = this.currentPlayer === 'black' ? 'white' : 'black';
-      // Check if game is finished after pass
-      this.checkGameStatus();
+      const [row, col] = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+      this.move(row, col);
+      return { type: 'move', row, col };
     }
 
-    // Start turn for next player (auto-move does not call clearTurnTimeout before passing)
-    if (!this.isFinished) {
-      this.startTurn();
-    }
+    // No legal moves - auto-pass by toggling current player
+    this.currentPlayer = this.currentPlayer === 'black' ? 'white' : 'black';
+    this.checkGameStatus();
+    return { type: 'pass' };
   }
 }
 

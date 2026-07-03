@@ -16,58 +16,130 @@ function registerSocketHandlers(io) {
   let matchQueue = []; // ランダムマッチ待ちの socket.id
   const privateWaiting = new Map(); // あいことば -> 待機中の socket.id
 
+  // ---- 共有ヘルパ（socket に依存しないので接続スコープの外に置く） -------
+
+  // クライアントが期待する形の状態オブジェクトを組み立てる
+  const buildClientState = (room) => {
+    // まだ対局前（募集中）
+    if (!room.game) {
+      return {
+        gameState: room.status, // 'waiting'
+        waiting: true,
+        player1: { id: room.host.id, name: room.host.name, pieces: 2 },
+        player2: room.guest
+          ? { id: room.guest.id, name: room.guest.name, pieces: 2 }
+          : null,
+        currentPlayer: null,
+        board: null,
+        lastMove: null,
+        winner: null,
+        turnRemaining: null,
+      };
+    }
+
+    const s = room.game.serialize();
+    const currentPlayer = s.currentPlayer === 'black' ? room.host.id : room.guest.id;
+
+    let winner = null;
+    if (s.isFinished) {
+      if (room.resignWinnerId) winner = room.resignWinnerId;
+      else if (s.winner === 'black') winner = room.host.id;
+      else if (s.winner === 'white') winner = room.guest.id;
+      else winner = 'draw';
+    }
+
+    return {
+      board: s.board,
+      currentPlayer,
+      gameState: s.isFinished ? 'finished' : 'playing',
+      player1: { id: room.host.id, name: room.host.name, pieces: s.blackCount },
+      player2: { id: room.guest.id, name: room.guest.name, pieces: s.whiteCount },
+      lastMove: room.lastMove || null,
+      winner,
+      // 手番の残り時間(ms)。クライアントは受信時刻に足してタイマー表示する
+      // （エポックを送らないのは端末の時計ズレに影響されないため）
+      turnRemaining:
+        !s.isFinished && room.game.turnDeadline
+          ? Math.max(0, room.game.turnDeadline - Date.now())
+          : null,
+    };
+  };
+
+  // "row,col" 文字列配列で合法手を返す
+  const legalMovesStr = (game) =>
+    getLegalMoves(game).map(([r, c]) => `${r},${c}`);
+
+  // payload が {roomId} でも文字列でも roomId を取り出す
+  const getRoomId = (payload) =>
+    payload && typeof payload === 'object' ? payload.roomId : payload;
+
+  // 手番タイマーを開始（時間切れになったら自動手を打ってクライアントへ配信）
+  const scheduleTurn = (room) => {
+    room.game.startTurn(() => handleTurnTimeout(room.roomId));
+  };
+
+  // 着手後の共通配信。
+  // 次手番のタイマーを先に張ってから状態を配ることで turnRemaining を新鮮に保つ。
+  // 着手しても手番が動かなければ相手がパスしたということなので通知する。
+  const broadcastAfterMove = (room, moverColor) => {
+    const game = room.game;
+    if (!game.isFinished) {
+      scheduleTurn(room);
+    }
+
+    io.to(room.roomId).emit('board-updated', buildClientState(room));
+    io.to(room.roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(game) });
+
+    if (!game.isFinished && game.currentPlayer === moverColor) {
+      const passed = moverColor === 'black' ? room.guest : room.host;
+      if (passed) {
+        io.to(room.roomId).emit('turn-passed', {
+          playerId: passed.id,
+          playerName: passed.name,
+        });
+      }
+    }
+
+    if (game.isFinished) {
+      room.status = 'finished';
+      io.to(room.roomId).emit('game-finished', buildClientState(room));
+    }
+  };
+
+  // 時間切れ：ランダムな合法手を自動で打ち（打てなければパス）、結果を配信する
+  const handleTurnTimeout = (roomId) => {
+    try {
+      const room = roomManager.getRoom(roomId);
+      if (!room || !room.game || room.status !== 'playing' || room.game.isFinished) return;
+
+      const timedOutColor = room.game.currentPlayer;
+      const timedOut = timedOutColor === 'black' ? room.host : room.guest;
+      const result = room.game.autoMove();
+      if (result.type === 'move') {
+        room.lastMove = { row: result.row, col: result.col };
+      }
+      console.log(`Turn timeout in ${roomId}: ${timedOut ? timedOut.name : '?'} -> ${result.type}`);
+
+      io.to(roomId).emit('turn-timeout', {
+        playerId: timedOut ? timedOut.id : null,
+        playerName: timedOut ? timedOut.name : '',
+        move: result.type === 'move' ? { row: result.row, col: result.col } : null,
+      });
+      broadcastAfterMove(room, timedOutColor);
+    } catch (error) {
+      console.error('turn-timeout error:', error);
+    }
+  };
+
+  // 対局開始（初戦・再戦共通）の配信
+  const startGame = (room) => {
+    scheduleTurn(room);
+    io.to(room.roomId).emit('game-started', buildClientState(room));
+    io.to(room.roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
+  };
+
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
-
-    // ---- ヘルパ ----------------------------------------------------------
-
-    // クライアントが期待する形の状態オブジェクトを組み立てる
-    const buildClientState = (room) => {
-      // まだ対局前（募集中）
-      if (!room.game) {
-        return {
-          gameState: room.status, // 'waiting'
-          waiting: true,
-          player1: { id: room.host.id, name: room.host.name, pieces: 2 },
-          player2: room.guest
-            ? { id: room.guest.id, name: room.guest.name, pieces: 2 }
-            : null,
-          currentPlayer: null,
-          board: null,
-          lastMove: null,
-          winner: null,
-        };
-      }
-
-      const s = room.game.serialize();
-      const currentPlayer = s.currentPlayer === 'black' ? room.host.id : room.guest.id;
-
-      let winner = null;
-      if (s.isFinished) {
-        if (room.resignWinnerId) winner = room.resignWinnerId;
-        else if (s.winner === 'black') winner = room.host.id;
-        else if (s.winner === 'white') winner = room.guest.id;
-        else winner = 'draw';
-      }
-
-      return {
-        board: s.board,
-        currentPlayer,
-        gameState: s.isFinished ? 'finished' : 'playing',
-        player1: { id: room.host.id, name: room.host.name, pieces: s.blackCount },
-        player2: { id: room.guest.id, name: room.guest.name, pieces: s.whiteCount },
-        lastMove: room.lastMove || null,
-        winner,
-      };
-    };
-
-    // "row,col" 文字列配列で合法手を返す
-    const legalMovesStr = (game) =>
-      getLegalMoves(game).map(([r, c]) => `${r},${c}`);
-
-    // payload が {roomId} でも文字列でも roomId を取り出す
-    const getRoomId = (payload) =>
-      payload && typeof payload === 'object' ? payload.roomId : payload;
 
     // ---- register --------------------------------------------------------
     socket.on('register', (playerName, callback) => {
@@ -140,11 +212,8 @@ function registerSocketHandlers(io) {
           room.lastMove = null;
           console.log(`Matched: ${oppName} vs ${name} (${roomId})`);
 
-          const state = buildClientState(room);
           io.to(roomId).emit('matched', { roomId });
-          io.to(roomId).emit('game-started', state);
-          io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
-          room.game.startTurn();
+          startGame(room);
           emitRoomsUpdated(io, roomManager, playerNames);
 
           if (callback) callback({ success: true, matched: true, roomId });
@@ -191,11 +260,8 @@ function registerSocketHandlers(io) {
           room.lastMove = null;
           console.log(`Private matched (${code}): ${oppName} vs ${name} (${roomId})`);
 
-          const state = buildClientState(room);
           io.to(roomId).emit('matched', { roomId });
-          io.to(roomId).emit('game-started', state);
-          io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
-          room.game.startTurn();
+          startGame(room);
           emitRoomsUpdated(io, roomManager, playerNames);
 
           if (callback) callback({ success: true, matched: true, roomId });
@@ -236,14 +302,10 @@ function registerSocketHandlers(io) {
         console.log(`Player ${playerName} joined room: ${roomId}`);
 
         // 対局開始を部屋の全員へ
-        const state = buildClientState(room);
-        io.to(roomId).emit('game-started', state);
-        io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
-
-        room.game.startTurn();
+        startGame(room);
         emitRoomsUpdated(io, roomManager, playerNames);
 
-        if (callback) callback({ success: true, roomId, gameState: state });
+        if (callback) callback({ success: true, roomId, gameState: buildClientState(room) });
       } catch (error) {
         console.error('join-room error:', error);
         if (callback) callback({ success: false, error: error.message });
@@ -285,16 +347,7 @@ function registerSocketHandlers(io) {
         room.lastMove = { row, col };
         console.log(`Move in ${roomId} at [${row}, ${col}]`);
 
-        const state = buildClientState(room);
-        io.to(roomId).emit('board-updated', state);
-        io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
-
-        if (room.game.isFinished) {
-          room.status = 'finished';
-          io.to(roomId).emit('game-finished', buildClientState(room));
-        } else {
-          room.game.startTurn();
-        }
+        broadcastAfterMove(room, myColor);
 
         if (callback) callback({ success: true });
       } catch (error) {
@@ -348,10 +401,7 @@ function registerSocketHandlers(io) {
           room.lastMove = null;
           room.resignWinnerId = null;
           roomManager.resetGame(roomId);
-          const state = buildClientState(room);
-          io.to(roomId).emit('game-started', state);
-          io.to(roomId).emit('legal-moves-updated', { legalMoves: legalMovesStr(room.game) });
-          room.game.startTurn();
+          startGame(room);
           emitRoomsUpdated(io, roomManager, playerNames);
         }
         if (callback) callback({ success: true });

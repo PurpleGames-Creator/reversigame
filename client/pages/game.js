@@ -25,7 +25,10 @@ export default function GamePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [rematch, setRematch] = useState('idle'); // idle | waiting | offered
+  const [deadline, setDeadline] = useState(null); // 手番の締切（ローカル時計基準のエポックms）
+  const [notice, setNotice] = useState(null); // パス・時間切れなどの一時通知
   const prevBoardRef = useRef(null);
+  const noticeTimerRef = useRef(null);
 
   const socket = initSocket();
 
@@ -44,11 +47,26 @@ export default function GamePage() {
     }
     setLoading(true);
 
+    // サーバーの残り時間(ms)をローカルの締切時刻へ変換（時計ズレの影響を受けない）
+    const syncDeadline = (data) =>
+      setDeadline(
+        typeof data?.turnRemaining === 'number' ? Date.now() + data.turnRemaining : null
+      );
+
+    // 2.6秒だけ表示する一時通知（パス・時間切れ）
+    const showNotice = (text) => {
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+      setNotice(text);
+      noticeTimerRef.current = setTimeout(() => setNotice(null), 2600);
+    };
+
     const handleGameStarted = (data) => {
       prevBoardRef.current = data.board;
       setGameState(data);
       setRematch('idle');
       setError(null);
+      setNotice(null);
+      syncDeadline(data);
       setLoading(false);
     };
     const handleBoardUpdated = (data) => {
@@ -67,6 +85,7 @@ export default function GamePage() {
         player1: data.player1,
         player2: data.player2,
       }));
+      syncDeadline(data);
     };
     const handleLegalMovesUpdated = (data) => setLegalMoves(data.legalMoves || []);
     const handleGameFinished = (data) => {
@@ -84,13 +103,29 @@ export default function GamePage() {
         player1: data.player1,
         player2: data.player2,
       }));
+      setDeadline(null);
     };
     const handleOpponentDisconnected = () => {
       setError(isSpectator ? 'この対戦は終了しました' : '相手が退出しました');
       setRematch('idle');
+      setDeadline(null);
     };
     const handleRematchRequested = ({ by } = {}) => {
       if (by !== socket.id) setRematch((prev) => (prev === 'waiting' ? prev : 'offered'));
+    };
+    const handleTurnPassed = ({ playerId, playerName } = {}) => {
+      showNotice(
+        playerId === socket.id
+          ? '置ける場所がないのでパス'
+          : `${playerName || '相手'} は置ける場所がないのでパス`
+      );
+    };
+    const handleTurnTimeout = ({ playerId } = {}) => {
+      showNotice(
+        playerId === socket.id
+          ? '時間切れ！自動で打たれました'
+          : '相手が時間切れ：自動で打たれました'
+      );
     };
 
     socket.on('game-started', handleGameStarted);
@@ -99,6 +134,8 @@ export default function GamePage() {
     socket.on('game-finished', handleGameFinished);
     socket.on('opponent-disconnected', handleOpponentDisconnected);
     socket.on('rematch-requested', handleRematchRequested);
+    socket.on('turn-passed', handleTurnPassed);
+    socket.on('turn-timeout', handleTurnTimeout);
 
     if (isSpectator) {
       // 観戦：プレイヤーにはならずルームに参加して状態を取得
@@ -106,6 +143,7 @@ export default function GamePage() {
         if (res && res.success && res.state && res.state.board) {
           prevBoardRef.current = res.state.board;
           setGameState(res.state);
+          syncDeadline(res.state);
           setLoading(false);
         } else {
           setError((res && res.error) || 'その対戦は見つかりません');
@@ -118,6 +156,7 @@ export default function GamePage() {
           prevBoardRef.current = data.board;
           setGameState(data);
           setLegalMoves(data.legalMoves || []);
+          syncDeadline(data);
           setLoading(false);
         }
       });
@@ -130,6 +169,9 @@ export default function GamePage() {
       socket.off('game-finished', handleGameFinished);
       socket.off('opponent-disconnected', handleOpponentDisconnected);
       socket.off('rematch-requested', handleRematchRequested);
+      socket.off('turn-passed', handleTurnPassed);
+      socket.off('turn-timeout', handleTurnTimeout);
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
     };
   }, [roomId, socket, router, isSpectator]);
 
@@ -216,24 +258,37 @@ export default function GamePage() {
             <span className="text-[11px] font-semibold tracking-wide text-white/50 bg-white/10 rounded-full px-3 py-1">
               観戦中
             </span>
-            <span className="text-sm font-semibold text-white/80">
-              {currentName} の番
-            </span>
+            {notice ? (
+              <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
+                {notice}
+              </span>
+            ) : (
+              <span className="text-sm font-semibold text-white/80">
+                {currentName} の番
+              </span>
+            )}
+            <Timer deadline={deadline} />
           </div>
         )}
 
         {isPlaying && !isSpectator && (
           <>
             <div className="text-center mt-3">
-              <span
-                className={`inline-block text-sm font-semibold rounded-full px-4 py-1.5 transition-colors ${
-                  myTurn ? 'bg-white text-violet-800' : 'text-white/60'
-                }`}
-              >
-                {myTurn ? 'あなたの番' : '相手の番…'}
-              </span>
+              {notice ? (
+                <span className="inline-block text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
+                  {notice}
+                </span>
+              ) : (
+                <span
+                  className={`inline-block text-sm font-semibold rounded-full px-4 py-1.5 transition-colors ${
+                    myTurn ? 'bg-white text-violet-800' : 'text-white/60'
+                  }`}
+                >
+                  {myTurn ? 'あなたの番' : '相手の番…'}
+                </span>
+              )}
             </div>
-            <Timer isActive={true} onTimeUp={() => {}} initialTime={20} />
+            <Timer deadline={deadline} />
           </>
         )}
 
