@@ -230,7 +230,7 @@ export default function TitleScreen() {
             </div>
             <button
               onClick={handleCancelMatch}
-              className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200"
+              className="btn w-full py-3 bg-white text-gray-700 font-semibold border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-400"
             >
               待機をやめる
             </button>
