@@ -5,6 +5,7 @@ import { initSocket } from '../lib/socket';
 import Board from '../components/Board';
 import PlayerInfo from '../components/PlayerInfo';
 import Timer from '../components/Timer';
+import Confetti from '../components/Confetti';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 
 // 切断した相手の復帰待ちカウントダウン（秒）
@@ -312,6 +313,7 @@ export default function GamePage() {
       ? gameState.player1?.name
       : gameState.player2?.name;
 
+
   // 操作ボタン（モバイルは盤の下・PC横並び時は左パネル内に表示）
   const actionButtons = isSpectator ? (
     <button onClick={handleExitSpectate} className="btn btn-glass w-full py-3.5">
@@ -424,6 +426,9 @@ export default function GamePage() {
             </div>
           </div>
         )}
+
+
+        {isFinished && gameState.winner === socket.id && !isSpectator && <Confetti />}
 
         {isFinished && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">

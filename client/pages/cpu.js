@@ -4,6 +4,7 @@ import Head from 'next/head';
 import Board from '../components/Board';
 import PlayerInfo from '../components/PlayerInfo';
 import Papuko from '../components/Papuko';
+import Confetti from '../components/Confetti';
 import {
   createInitialBoard,
   getLegalMoves,
@@ -111,6 +112,7 @@ export default function CpuGame() {
   const humanMoves =
     phase === 'playing' && turn === WHITE && !thinking ? getLegalMoves(board, WHITE) : [];
 
+
   // ---- 難易度選択 ----
   if (phase === 'select') {
     return (
@@ -216,6 +218,9 @@ export default function CpuGame() {
           </button>
         </div>
 
+
+        {isFinished && winner === WHITE && <Confetti />}
+
         {isFinished && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
             <div className="finish-card glass-light rounded-3xl p-7 max-w-sm w-full text-center">
@@ -226,7 +231,7 @@ export default function CpuGame() {
                 {winner === 'draw' ? '引き分け' : winner === WHITE ? 'あなたの勝ち' : 'パプ子の勝ち'}
               </h2>
               <p className="text-gray-500 text-sm mb-5">
-                {winner === WHITE ? 'おみごと！' : winner === PURPLE ? 'また挑戦してね' : 'いい勝負でした'}
+                {winner === PURPLE ? 'また挑戦してね' : winner === 'draw' ? 'いい勝負でした' : ''}
               </p>
 
               <div className="flex justify-center gap-10 mb-6">
@@ -246,7 +251,7 @@ export default function CpuGame() {
                 </button>
                 <button
                   onClick={backToSelect}
-                  className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  className="btn w-full py-3 bg-gray-900 text-white hover:bg-gray-950"
                 >
                   難易度を変える
                 </button>

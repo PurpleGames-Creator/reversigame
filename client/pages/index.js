@@ -210,7 +210,7 @@ export default function TitleScreen() {
             <div className="flex justify-center mb-3">
               <Papuko size={96} float glow />
             </div>
-            <p className="text-lg font-bold text-gray-900 mb-1">相手を待っています</p>
+            <p className="text-lg font-bold text-gray-900 mb-1 search-breathing">対戦相手検索中</p>
             {matchMode === 'private' ? (
               <p className="text-sm text-gray-500 mb-1">
                 あいことば：<span className="font-bold text-violet-700">{privateCode.trim()}</span>
@@ -269,7 +269,7 @@ export default function TitleScreen() {
             {/* パプ子と対戦 */}
             <button
               onClick={() => router.push('/cpu')}
-              className="btn-primary rounded-2xl flex items-center justify-center py-6 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-2"
+              className="btn-glass rounded-2xl flex items-center justify-center py-6 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-2"
             >
               パプ子と対戦
             </button>
@@ -324,7 +324,7 @@ export default function TitleScreen() {
                 disabled={!playerName.trim() || loading}
                 className="btn btn-violet w-full py-3.5 text-base"
               >
-                {loading ? '接続中…' : '待機ロビーへ'}
+                {loading ? '接続中…' : '対局開始'}
               </button>
               {loading && !connected && (
                 <p className="text-xs text-white/60 text-center leading-relaxed">

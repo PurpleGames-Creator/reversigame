@@ -233,12 +233,51 @@ input {
   animation: modalPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.15) 0.55s both;
 }
 
+/* ---------- クラッカー（勝利演出） ----------
+   終局時に紫・白のパーティクルが中心から爆発的に広がる */
+@keyframes burstOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3) translate(var(--tx), var(--ty));
+  }
+}
+
+.confetti-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 45;
+}
+
+.confetti-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: burstOut 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
 @keyframes softPulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
 }
 .legal-dot {
   animation: softPulse 1.8s ease-in-out infinite;
+}
+
+/* マッチング待機：「対戦相手検索中」の呼吸アニメ */
+@keyframes breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+.search-breathing {
+  animation: breathe 4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
