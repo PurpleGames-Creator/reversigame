@@ -45,12 +45,12 @@ class RoomManager {
    * @returns {string} Generated roomId
    * @throws {Error} If room creation fails
    */
-  createRoom(hostId, hostName) {
+  createRoom(hostId, hostName, hostToken = null) {
     const roomId = `room_${++this.roomCounter}_${Date.now()}`;
 
     const room = {
       roomId,
-      host: { id: hostId, name: hostName },
+      host: { id: hostId, name: hostName, token: hostToken, disconnected: false },
       guest: null,
       game: null,
       status: 'waiting',
@@ -71,7 +71,7 @@ class RoomManager {
    * @returns {Object} Updated room object
    * @throws {Error} If room not found or not available
    */
-  joinRoom(roomId, guestId, guestName) {
+  joinRoom(roomId, guestId, guestName, guestToken = null) {
     const room = this.rooms.get(roomId);
 
     if (!room) {
@@ -83,7 +83,7 @@ class RoomManager {
     }
 
     // Set guest and initialize game
-    room.guest = { id: guestId, name: guestName };
+    room.guest = { id: guestId, name: guestName, token: guestToken, disconnected: false };
     room.game = new ReversiGame(room.host, room.guest);
     room.status = 'playing';
 
@@ -128,6 +128,14 @@ class RoomManager {
       room.game.clearTurnTimeout();
     }
 
+    // Stop pending disconnect-grace timers (set by the socket layer)
+    for (const side of ['host', 'guest']) {
+      if (room[side] && room[side].graceTimeoutId) {
+        clearTimeout(room[side].graceTimeoutId);
+        room[side].graceTimeoutId = null;
+      }
+    }
+
     // Remove player mappings
     if (room.host) {
       this.playerToRoom.delete(room.host.id);
@@ -138,6 +146,37 @@ class RoomManager {
 
     // Delete room
     this.rooms.delete(roomId);
+  }
+
+  /**
+   * Reconnect a disconnected player under a new socket id.
+   * Identified by the persistent player token (socket.io auth), so a page
+   * reload or network blip within the grace period can resume the game.
+   *
+   * @param {string} roomId
+   * @param {string} token - Persistent player token
+   * @param {string} newId - New socket id
+   * @returns {{ room: Object, side: 'host'|'guest', player: Object }|null}
+   */
+  reconnectPlayer(roomId, token, newId) {
+    const room = this.rooms.get(roomId);
+    if (!room || !token) return null;
+
+    let side = null;
+    if (room.host && room.host.token === token) side = 'host';
+    else if (room.guest && room.guest.token === token) side = 'guest';
+    if (!side) return null;
+
+    const player = room[side];
+    // 接続中プレイヤーの乗っ取り防止：切断中の本人だけ復帰できる
+    if (!player.disconnected) return null;
+
+    this.playerToRoom.delete(player.id);
+    player.id = newId;
+    player.disconnected = false;
+    this.playerToRoom.set(newId, roomId);
+
+    return { room, side, player };
   }
 
   /**

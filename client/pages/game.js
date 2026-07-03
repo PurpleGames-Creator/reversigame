@@ -7,6 +7,19 @@ import PlayerInfo from '../components/PlayerInfo';
 import Timer from '../components/Timer';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 
+// 切断した相手の復帰待ちカウントダウン（秒）
+function GraceCountdown({ until }) {
+  const [left, setLeft] = useState(Math.max(0, Math.ceil((until - Date.now()) / 1000)));
+  useEffect(() => {
+    const t = setInterval(
+      () => setLeft(Math.max(0, Math.ceil((until - Date.now()) / 1000))),
+      250
+    );
+    return () => clearInterval(t);
+  }, [until]);
+  return <span className="font-bold tabular-nums">{left}</span>;
+}
+
 // 2つの盤面で色が変わったマス数を数える（＝置いた1手＋裏返った枚数）
 function countChanged(prev, next) {
   if (!prev || !next) return 0;
@@ -27,6 +40,10 @@ export default function GamePage() {
   const [rematch, setRematch] = useState('idle'); // idle | waiting | offered
   const [deadline, setDeadline] = useState(null); // 手番の締切（ローカル時計基準のエポックms）
   const [notice, setNotice] = useState(null); // パス・時間切れなどの一時通知
+  const [connLost, setConnLost] = useState(false); // 自分の接続が切れた（再接続中）
+  const [graceUntil, setGraceUntil] = useState(null); // 相手の復帰待ち締切
+  const [graceName, setGraceName] = useState(null); // 復帰待ちのプレイヤー名
+  const [opponentGone, setOpponentGone] = useState(false); // 相手が完全に退出済み
   const prevBoardRef = useRef(null);
   const noticeTimerRef = useRef(null);
 
@@ -41,11 +58,11 @@ export default function GamePage() {
 
   useEffect(() => {
     if (!roomId) return;
-    if (!socket.connected) {
-      router.push('/');
-      return;
-    }
     setLoading(true);
+
+    // 未接続でもすぐ諦めない（リロード直後や再接続中は connect 後に rejoin する）。
+    // 一定時間つながらなければ「読み込めません」画面へ。
+    const bootTimeout = setTimeout(() => setLoading(false), 20000);
 
     // サーバーの残り時間(ms)をローカルの締切時刻へ変換（時計ズレの影響を受けない）
     const syncDeadline = (data) =>
@@ -66,6 +83,8 @@ export default function GamePage() {
       setRematch('idle');
       setError(null);
       setNotice(null);
+      setGraceUntil(null);
+      setOpponentGone(false);
       syncDeadline(data);
       setLoading(false);
     };
@@ -104,14 +123,61 @@ export default function GamePage() {
         player2: data.player2,
       }));
       setDeadline(null);
+      setGraceUntil(null);
     };
     const handleOpponentDisconnected = () => {
       setError(isSpectator ? 'この対戦は終了しました' : '相手が退出しました');
       setRematch('idle');
       setDeadline(null);
+      setGraceUntil(null);
+      setOpponentGone(true);
     };
     const handleRematchRequested = ({ by } = {}) => {
       if (by !== socket.id) setRematch((prev) => (prev === 'waiting' ? prev : 'offered'));
+    };
+    const handleOpponentConnLost = ({ graceMs, playerName } = {}) => {
+      setGraceUntil(Date.now() + (graceMs || 30000));
+      setGraceName(playerName || '相手');
+      setDeadline(null); // 復帰待ちの間は手番タイマーも止まっている
+    };
+    const handleOpponentReconnected = ({ playerName } = {}) => {
+      setGraceUntil(null);
+      showNotice(`${playerName || '相手'} が復帰しました`);
+    };
+    // 自分の接続が切れた → オーバーレイを出し、復帰したら対局へ再参加
+    const handleDisconnect = () => {
+      setConnLost(true);
+      setDeadline(null);
+    };
+    const handleReconnect = () => {
+      if (isSpectator) {
+        socket.emit('spectate', { roomId }, (res) => {
+          setConnLost(false);
+          setLoading(false);
+          if (res && res.success && res.state && res.state.board) {
+            prevBoardRef.current = res.state.board;
+            setGameState(res.state);
+            syncDeadline(res.state);
+            setError(null);
+          } else {
+            setError((res && res.error) || 'この対戦は終了しました');
+          }
+        });
+      } else {
+        socket.emit('rejoin-room', { roomId }, (res) => {
+          setConnLost(false);
+          setLoading(false);
+          if (res && res.success && res.state && res.state.board) {
+            prevBoardRef.current = res.state.board;
+            setGameState(res.state);
+            setLegalMoves(res.legalMoves || []);
+            syncDeadline(res.state);
+            setError(null);
+          } else {
+            setError((res && res.error) || '対局に戻れませんでした');
+          }
+        });
+      }
     };
     const handleTurnPassed = ({ playerId, playerName } = {}) => {
       showNotice(
@@ -136,31 +202,38 @@ export default function GamePage() {
     socket.on('rematch-requested', handleRematchRequested);
     socket.on('turn-passed', handleTurnPassed);
     socket.on('turn-timeout', handleTurnTimeout);
+    socket.on('opponent-connection-lost', handleOpponentConnLost);
+    socket.on('opponent-reconnected', handleOpponentReconnected);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('connect', handleReconnect);
 
-    if (isSpectator) {
-      // 観戦：プレイヤーにはならずルームに参加して状態を取得
-      socket.emit('spectate', { roomId }, (res) => {
-        if (res && res.success && res.state && res.state.board) {
-          prevBoardRef.current = res.state.board;
-          setGameState(res.state);
-          syncDeadline(res.state);
-          setLoading(false);
-        } else {
-          setError((res && res.error) || 'その対戦は見つかりません');
-          setLoading(false);
-        }
-      });
-    } else {
-      socket.emit('get-game-state', { roomId }, (data) => {
-        if (data && data.board) {
-          prevBoardRef.current = data.board;
-          setGameState(data);
-          setLegalMoves(data.legalMoves || []);
-          syncDeadline(data);
-          setLoading(false);
-        }
-      });
+    if (socket.connected) {
+      if (isSpectator) {
+        // 観戦：プレイヤーにはならずルームに参加して状態を取得
+        socket.emit('spectate', { roomId }, (res) => {
+          if (res && res.success && res.state && res.state.board) {
+            prevBoardRef.current = res.state.board;
+            setGameState(res.state);
+            syncDeadline(res.state);
+            setLoading(false);
+          } else {
+            setError((res && res.error) || 'その対戦は見つかりません');
+            setLoading(false);
+          }
+        });
+      } else {
+        socket.emit('get-game-state', { roomId }, (data) => {
+          if (data && data.board) {
+            prevBoardRef.current = data.board;
+            setGameState(data);
+            setLegalMoves(data.legalMoves || []);
+            syncDeadline(data);
+            setLoading(false);
+          }
+        });
+      }
     }
+    // 未接続の場合は 'connect' → handleReconnect が rejoin/spectate で状態を取得する
 
     return () => {
       socket.off('game-started', handleGameStarted);
@@ -171,7 +244,12 @@ export default function GamePage() {
       socket.off('rematch-requested', handleRematchRequested);
       socket.off('turn-passed', handleTurnPassed);
       socket.off('turn-timeout', handleTurnTimeout);
+      socket.off('opponent-connection-lost', handleOpponentConnLost);
+      socket.off('opponent-reconnected', handleOpponentReconnected);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('connect', handleReconnect);
       if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+      clearTimeout(bootTimeout);
     };
   }, [roomId, socket, router, isSpectator]);
 
@@ -208,7 +286,7 @@ export default function GamePage() {
 
   if (loading && !gameState) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen [height:100dvh]">
         <p className="text-white/80 font-medium animate-pulse">読み込み中…</p>
       </div>
     );
@@ -216,8 +294,8 @@ export default function GamePage() {
 
   if (!gameState) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen gap-4 px-6">
-        <p className="text-white/80 font-medium">ゲーム情報を読み込めません</p>
+      <div className="flex flex-col items-center justify-center h-screen [height:100dvh] gap-4 px-6">
+        <p className="text-white/80 font-medium">{error || 'ゲーム情報を読み込めません'}</p>
         <button onClick={() => router.push('/')} className="btn btn-glass px-6 py-3">
           タイトルへ戻る
         </button>
@@ -237,13 +315,21 @@ export default function GamePage() {
   return (
     <>
       <Head><title>{isSpectator ? '観戦中' : '対戦中'} | Purple Reversi</title></Head>
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-screen [height:100dvh]">
         {error && (
           <div className="glass-light rounded-2xl mx-4 mt-4 px-4 py-3 flex items-center justify-between text-sm text-rose-700">
             <span>{error}</span>
             <button onClick={() => setError(null)} className="font-bold text-rose-500 hover:text-rose-700 px-2">
               ×
             </button>
+          </div>
+        )}
+
+        {/* 相手の復帰待ちカウントダウン */}
+        {graceUntil && !error && (
+          <div className="glass rounded-2xl mx-4 mt-4 px-4 py-3 text-center text-sm text-white/90">
+            {graceName || '相手'} の接続が切れました。復帰を待っています…{' '}
+            <GraceCountdown until={graceUntil} /> 秒
           </div>
         )}
 
@@ -299,7 +385,7 @@ export default function GamePage() {
           onCellClick={handleCellClick}
         />
 
-        <div className="px-4 pb-6">
+        <div className="px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
           {isSpectator ? (
             <button onClick={handleExitSpectate} className="btn btn-glass w-full py-3.5">
               観戦をやめる
@@ -314,6 +400,21 @@ export default function GamePage() {
             </button>
           ) : null}
         </div>
+
+        {/* 自分の接続が切れた：再接続オーバーレイ */}
+        {connLost && (
+          <div className="fixed inset-0 bg-[#2a0f4c]/80 backdrop-blur-sm flex items-center justify-center z-[60] p-6">
+            <div className="glass-light rounded-3xl p-7 max-w-xs w-full text-center animate-rise">
+              <p className="text-base font-bold text-gray-900 mb-1">接続が切れました</p>
+              <p className="text-sm text-gray-500 mb-4">再接続しています…</p>
+              <div className="flex justify-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </div>
+        )}
 
         {isFinished && (
           <div className="fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -350,6 +451,8 @@ export default function GamePage() {
                   <button onClick={handleExitSpectate} className="btn btn-violet w-full py-3.5">
                     観戦を終える
                   </button>
+                ) : opponentGone ? (
+                  <p className="text-sm text-gray-500 py-2">相手は退出しました</p>
                 ) : rematch === 'waiting' ? (
                   <div className="w-full py-3.5 rounded-full bg-violet-100 text-violet-700 font-semibold flex items-center justify-center gap-2">
                     <span className="flex gap-1">

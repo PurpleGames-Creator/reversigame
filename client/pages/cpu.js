@@ -166,7 +166,7 @@ export default function CpuGame() {
   return (
     <>
       <Head><title>パプ子と対戦 | Purple Reversi</title></Head>
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-screen [height:100dvh]">
         <PlayerInfo
           player1={{ ...YOU, pieces: whiteCount }}
           player2={{ ...CPU, pieces: purpleCount }}
@@ -195,7 +195,7 @@ export default function CpuGame() {
 
         <Board board={board} legalMoves={humanMoves} lastMove={lastMove} onCellClick={handleCellClick} />
 
-        <div className="px-4 pb-6">
+        <div className="px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
           <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
             対局をやめる
           </button>

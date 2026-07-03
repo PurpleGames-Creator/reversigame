@@ -10,11 +10,18 @@ const { getLegalMoves } = require('../game/rules');
  * - legalMoves は "row,col" 文字列配列（Boardコンポーネント互換）
  * - gameState は 'waiting' | 'playing' | 'finished'
  */
+// 対局中に切断したプレイヤーの復帰を待つ猶予時間
+const GRACE_MS = 30000;
+
 function registerSocketHandlers(io) {
   const roomManager = new RoomManager();
   const playerNames = new Map(); // socket.id -> name
   let matchQueue = []; // ランダムマッチ待ちの socket.id
   const privateWaiting = new Map(); // あいことば -> 待機中の socket.id
+
+  // socket.io の auth に載る永続プレイヤートークン（再接続時の本人特定用）
+  const tokenOf = (s) =>
+    (s && s.handshake && s.handshake.auth && s.handshake.auth.token) || null;
 
   // ---- 共有ヘルパ（socket に依存しないので接続スコープの外に置く） -------
 
@@ -131,6 +138,27 @@ function registerSocketHandlers(io) {
     }
   };
 
+  // 切断グレース期間が切れた：切断した側の負けで終局
+  const forfeitByDisconnect = (roomId, side) => {
+    try {
+      const room = roomManager.getRoom(roomId);
+      if (!room || !room.game || room.status !== 'playing') return;
+      const loser = room[side];
+      if (!loser || !loser.disconnected) return;
+
+      const winner = side === 'host' ? room.guest : room.host;
+      room.resignWinnerId = (winner && winner.id) || null;
+      room.game.clearTurnTimeout();
+      roomManager.finishGame(roomId);
+      console.log(`Forfeit by disconnect in ${roomId}: ${loser.name}`);
+
+      io.to(roomId).emit('game-finished', buildClientState(room));
+      io.to(roomId).emit('opponent-disconnected');
+    } catch (error) {
+      console.error('forfeit error:', error);
+    }
+  };
+
   // 対局開始（初戦・再戦共通）の配信
   const startGame = (room) => {
     scheduleTurn(room);
@@ -170,7 +198,7 @@ function registerSocketHandlers(io) {
         const playerName = playerNames.get(socket.id);
         if (!playerName) throw new Error('Player not registered');
 
-        const roomId = roomManager.createRoom(socket.id, playerName);
+        const roomId = roomManager.createRoom(socket.id, playerName, tokenOf(socket));
         socket.join(roomId);
         console.log(`Room created: ${roomId} by ${playerName}`);
 
@@ -204,10 +232,10 @@ function registerSocketHandlers(io) {
         if (opponentId) {
           // 待っていた方を host(先手/白)、来た方を guest にして対局開始
           const oppName = playerNames.get(opponentId) || 'Player';
-          const roomId = roomManager.createRoom(opponentId, oppName);
           const oppSocket = io.sockets.sockets.get(opponentId);
+          const roomId = roomManager.createRoom(opponentId, oppName, tokenOf(oppSocket));
           if (oppSocket) oppSocket.join(roomId);
-          const room = roomManager.joinRoom(roomId, socket.id, name);
+          const room = roomManager.joinRoom(roomId, socket.id, name, tokenOf(socket));
           socket.join(roomId);
           room.lastMove = null;
           console.log(`Matched: ${oppName} vs ${name} (${roomId})`);
@@ -252,10 +280,11 @@ function registerSocketHandlers(io) {
           // 同じ合言葉の相手が居た → その2人で対局開始
           privateWaiting.delete(code);
           const oppName = playerNames.get(waiterId) || 'Player';
-          const roomId = roomManager.createRoom(waiterId, oppName); // 先に待っていた方=host(白/先手)
           const oppSocket = io.sockets.sockets.get(waiterId);
+          // 先に待っていた方=host(白/先手)
+          const roomId = roomManager.createRoom(waiterId, oppName, tokenOf(oppSocket));
           if (oppSocket) oppSocket.join(roomId);
-          const room = roomManager.joinRoom(roomId, socket.id, name);
+          const room = roomManager.joinRoom(roomId, socket.id, name, tokenOf(socket));
           socket.join(roomId);
           room.lastMove = null;
           console.log(`Private matched (${code}): ${oppName} vs ${name} (${roomId})`);
@@ -296,7 +325,7 @@ function registerSocketHandlers(io) {
         const playerName = playerNames.get(socket.id);
         if (!playerName) throw new Error('Player not registered');
 
-        const room = roomManager.joinRoom(roomId, socket.id, playerName);
+        const room = roomManager.joinRoom(roomId, socket.id, playerName, tokenOf(socket));
         socket.join(roomId);
         room.lastMove = null;
         console.log(`Player ${playerName} joined room: ${roomId}`);
@@ -452,6 +481,46 @@ function registerSocketHandlers(io) {
       }
     });
 
+    // ---- rejoin-room（切断グレース中の復帰。トークンで本人を特定） --------
+    socket.on('rejoin-room', (payload, callback) => {
+      try {
+        const roomId = getRoomId(payload);
+        const token = tokenOf(socket);
+        const room = roomManager.getRoom(roomId);
+        if (!room || !room.game || !token) {
+          throw new Error('この対局はすでに終了しています');
+        }
+
+        const rec = roomManager.reconnectPlayer(roomId, token, socket.id);
+        if (!rec) throw new Error('この対局には再参加できません');
+
+        if (rec.player.graceTimeoutId) {
+          clearTimeout(rec.player.graceTimeoutId);
+          rec.player.graceTimeoutId = null;
+        }
+        playerNames.set(socket.id, rec.player.name);
+        socket.join(roomId);
+        console.log(`Player ${rec.player.name} rejoined ${roomId}`);
+
+        socket.to(roomId).emit('opponent-reconnected', { playerName: rec.player.name });
+
+        // 手番タイマーを再開（切断中は止めていたのでフル20秒から）
+        if (room.status === 'playing' && !room.game.isFinished) {
+          scheduleTurn(room);
+        }
+
+        if (callback)
+          callback({
+            success: true,
+            state: buildClientState(room),
+            legalMoves: legalMovesStr(room.game),
+          });
+      } catch (error) {
+        console.error('rejoin-room error:', error.message);
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
     // ---- leave-room ------------------------------------------------------
     socket.on('leave-room', (payload, callback) => {
       try {
@@ -482,11 +551,36 @@ function registerSocketHandlers(io) {
         }
         const room = roomManager.getPlayerRoom(socket.id);
         if (room) {
-          // 対局相手が居れば（対局中でも終局後の再戦待ちでも）通知
-          if (room.host && room.guest) {
-            io.to(room.roomId).emit('opponent-disconnected');
+          const side = room.host && room.host.id === socket.id ? 'host' : 'guest';
+          const other = side === 'host' ? room.guest : room.host;
+          const canGrace =
+            room.status === 'playing' &&
+            room.game &&
+            !room.game.isFinished &&
+            other &&
+            !other.disconnected;
+
+          if (canGrace) {
+            // 対局中の切断：即破棄せずグレース期間だけ復帰(rejoin-room)を待つ。
+            // 切断側が不利にならないよう手番タイマーは復帰まで止める。
+            room[side].disconnected = true;
+            room.game.clearTurnTimeout();
+            io.to(room.roomId).emit('opponent-connection-lost', {
+              playerId: socket.id,
+              playerName: room[side].name,
+              graceMs: GRACE_MS,
+            });
+            room[side].graceTimeoutId = setTimeout(
+              () => forfeitByDisconnect(room.roomId, side),
+              GRACE_MS
+            );
+          } else {
+            // 対局前・終局後・両者切断：従来どおり部屋を破棄
+            if (room.host && room.guest) {
+              io.to(room.roomId).emit('opponent-disconnected');
+            }
+            roomManager.leaveRoom(room.roomId);
           }
-          roomManager.leaveRoom(room.roomId);
         }
         playerNames.delete(socket.id);
         io.emit('online-count-updated', { onlineCount: playerNames.size });

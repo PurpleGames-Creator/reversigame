@@ -115,7 +115,7 @@ export default function TitleScreen() {
     if (!playerName.trim() || loading || matching) return;
     setLoading(true);
     socket.emit('register', playerName.trim(), (res) => {
-      if (res) {
+      if (res && res.success) {
         setPlayerName(playerName.trim());
         setLoading(false);
         setMatchMode('random');
@@ -133,7 +133,7 @@ export default function TitleScreen() {
     if (!playerName.trim() || !code || loading || matching) return;
     setLoading(true);
     socket.emit('register', playerName.trim(), (res) => {
-      if (res) {
+      if (res && res.success) {
         setPlayerName(playerName.trim());
         setLoading(false);
         setMatchMode('private');
