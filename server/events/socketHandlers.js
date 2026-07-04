@@ -495,11 +495,17 @@ function registerSocketHandlers(io) {
     // ---- get-live-games（観戦できる進行中の対戦一覧） --------------------
     socket.on('get-live-games', (callback) => {
       try {
-        const games = roomManager.getPlayingRooms().map((room) => ({
-          roomId: room.roomId,
-          player1: room.host.name,
-          player2: room.guest ? room.guest.name : '—',
-        }));
+        const games = roomManager.getPlayingRooms().map((room) => {
+          const s = room.game ? room.game.serialize() : null;
+          return {
+            roomId: room.roomId,
+            player1: room.host.name,
+            player2: room.guest ? room.guest.name : '—',
+            pieces1: s ? s.blackCount : 2,
+            pieces2: s ? s.whiteCount : 2,
+            moves: s ? Math.max(0, s.blackCount + s.whiteCount - 4) : 0,
+          };
+        });
         if (callback) callback({ games });
       } catch (error) {
         console.error('get-live-games error:', error);

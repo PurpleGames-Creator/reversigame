@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { playTick } from '../lib/sound';
 
 // サーバー同期タイマー。
 // deadline はローカル時計基準のエポックms（サーバーから受け取った
@@ -24,12 +25,22 @@ export default function Timer({ deadline, totalMs = 20000 }) {
   const urgent = seconds <= 5;
   const pct = Math.max(0, Math.min(1, remaining / totalMs));
 
+  // 残り5秒からは1秒ごとに小さく「コッ」と鳴らして緊迫感を出す
+  const lastTickRef = useRef(null);
+  useEffect(() => {
+    if (!deadline || !urgent || seconds <= 0) return;
+    if (lastTickRef.current !== seconds) {
+      lastTickRef.current = seconds;
+      playTick();
+    }
+  }, [deadline, urgent, seconds]);
+
   return (
     <div className="mx-auto mt-3 w-40">
       <div className="flex items-baseline justify-center gap-1">
         <span
           className={`text-2xl font-bold tabular-nums transition-colors ${
-            urgent ? 'text-rose-300' : 'text-white'
+            urgent ? 'text-rose-300 timer-urgent' : 'text-white'
           }`}
         >
           {seconds}

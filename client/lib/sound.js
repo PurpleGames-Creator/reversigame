@@ -132,6 +132,12 @@ export function playClick() {
   osc.stop(t0 + 0.05);
 }
 
+// 残り時間わずかの「コッ」という小さな警告音（タイマー用）
+export function playTick() {
+  if (muted) return;
+  woodTone(660, { dur: 0.05, gain: 0.1, type: 'square', cutoff: 2400 });
+}
+
 // ひっくり返る駒の音（枚数ぶん軽くカスケード）
 export function playFlips(count) {
   if (muted) return;

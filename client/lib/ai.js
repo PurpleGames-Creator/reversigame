@@ -62,6 +62,11 @@ function evaluate(board, me) {
   return position + mobility;
 }
 
+// 形勢グラフ用：color視点の静的評価値を外部へ公開（探索なし・軽量）
+export function evaluateFor(board, color) {
+  return evaluate(board, color);
+}
+
 // 時間切れ通知用（究極の反復深化で使用）
 const TIME_UP = new Error('ai time up');
 

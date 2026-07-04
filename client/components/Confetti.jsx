@@ -1,12 +1,12 @@
 import { useRef, useEffect } from 'react';
 
-export default function Confetti({ colors = ['#a78bfa', '#ffffff'] }) {
+export default function Confetti({ colors = ['#a78bfa', '#ffffff'], count = 20 }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    for (let i = 0; i < 20; i++) {
-      const angle = (i / 20) * Math.PI * 2;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
       const distance = 150 + Math.random() * 100;
       const tx = Math.cos(angle) * distance;
       const ty = Math.sin(angle) * distance;

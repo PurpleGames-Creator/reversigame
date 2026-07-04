@@ -17,6 +17,8 @@ import {
   PURPLE,
 } from '../lib/reversi';
 import SoundToggle from '../components/SoundToggle';
+import CountUp from '../components/CountUp';
+import Replay from '../components/Replay';
 import { chooseMove } from '../lib/ai';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 import {
@@ -26,6 +28,8 @@ import {
   markUltimateBeaten,
   getCpuRecords,
   recordCpuResult,
+  getCpuStreaks,
+  bumpCpuStreak,
 } from '../lib/storage';
 
 const YOU = { id: 'you', name: 'あなた' };
@@ -69,7 +73,12 @@ export default function CpuGame() {
   const [hintsLeft, setHintsLeft] = useState(3);
   const [hintCell, setHintCell] = useState(null);
   const [papukoLine, setPapukoLine] = useState(null); // パプ子のセリフ（一時表示）
+  const [streaks, setStreaks] = useState({});
+  const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key}
+  const [replayOpen, setReplayOpen] = useState(false);
 
+  const framesRef = useRef([]); // リプレイ用の盤面スナップショット
+  const openingTimerRef = useRef(null);
   const papukoTimerRef = useRef(null);
   const leadSaidRef = useRef(false); // 「いい感じかも」を言ったか（1局1回）
   const behindSaidRef = useRef(false); // 「まだ負けてない」を言ったか（1局1回）
@@ -80,6 +89,7 @@ export default function CpuGame() {
     setUltimateUnlocked(isUltimateUnlocked());
     setUltimateBeaten(isUltimateBeaten());
     setRecords(getCpuRecords());
+    setStreaks(getCpuStreaks());
   }, []);
 
   // アンマウント時にAIワーカーを破棄
@@ -147,7 +157,10 @@ export default function CpuGame() {
       setJustUnlocked(false);
       setJustBeatUltimate(false);
       setDifficulty(diff);
-      setBoard(createInitialBoard());
+      const initial = createInitialBoard();
+      setBoard(initial);
+      framesRef.current = [{ board: initial, lastMove: null }];
+      setReplayOpen(false);
       setTurn(WHITE);
       setLastMove(null);
       setWinner(null);
@@ -158,6 +171,10 @@ export default function CpuGame() {
       leadSaidRef.current = false;
       behindSaidRef.current = false;
       setPhase('playing');
+      // 対局開始フラッシュ（1.4秒で自動消滅）
+      setOpening({ key: Date.now() });
+      if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
+      openingTimerRef.current = setTimeout(() => setOpening(null), 1450);
       say(GREETINGS[diff] || 'よろしくね♪');
     },
     [say]
@@ -187,12 +204,14 @@ export default function CpuGame() {
       setWinner(status.winner);
       setThinking(false);
       setPhase('finished');
-      // 難易度別の戦績を記録
+      // 難易度別の戦績・連勝を記録
       recordCpuResult(
         difficulty,
         status.winner === WHITE ? 'w' : status.winner === PURPLE ? 'l' : 'd'
       );
+      bumpCpuStreak(difficulty, status.winner === WHITE);
       setRecords(getCpuRecords());
+      setStreaks(getCpuStreaks());
       // 「つよい」に勝ったら究極を解放
       if (status.winner === WHITE && difficulty === 'hard' && !ultimateUnlocked) {
         unlockUltimate();
@@ -227,6 +246,7 @@ export default function CpuGame() {
             const flipped = getFlips(board, mv.row, mv.col, PURPLE).length;
             const next = applyMove(board, mv.row, mv.col, PURPLE);
             setBoard(next);
+            framesRef.current.push({ board: next, lastMove: mv });
             setLastMove(mv);
             playPlace();
             playFlips(flipped);
@@ -265,7 +285,9 @@ export default function CpuGame() {
     setMessage(null);
     setHintCell(null);
     const flipped = getFlips(board, row, col, WHITE).length;
-    setBoard((b) => applyMove(b, row, col, WHITE));
+    const next = applyMove(board, row, col, WHITE);
+    setBoard(next);
+    framesRef.current.push({ board: next, lastMove: { row, col } });
     setLastMove({ row, col });
     playPlace();
     playFlips(flipped);
@@ -334,8 +356,15 @@ export default function CpuGame() {
                       </span>
                     </span>
                     {hasRec && (
-                      <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">
-                        {rec.w}勝{rec.l}敗{(rec.d || 0) > 0 ? `${rec.d}分` : ''}
+                      <span className="text-right shrink-0">
+                        <span className="block text-[11px] text-gray-400 tabular-nums">
+                          {rec.w}勝{rec.l}敗{(rec.d || 0) > 0 ? `${rec.d}分` : ''}
+                        </span>
+                        {(streaks[d.key] || 0) >= 2 && (
+                          <span className="block text-[11px] font-bold text-orange-500 tabular-nums">
+                            🔥{streaks[d.key]}連勝中
+                          </span>
+                        )}
                       </span>
                     )}
                     {locked && (
@@ -399,21 +428,18 @@ export default function CpuGame() {
             ) : null}
           </div>
 
-          {/* ヒント（よわい/ふつう限定・1局3回・自分の番だけ） */}
-          {(difficulty === 'easy' || difficulty === 'normal') &&
-            phase === 'playing' &&
-            turn === WHITE &&
-            !thinking &&
-            hintsLeft > 0 && (
-              <div className="text-center mt-2">
-                <button
-                  onClick={handleHint}
-                  className="btn btn-glass px-4 py-1.5 text-xs"
-                >
-                  💡 ヒント（あと{hintsLeft}回）
-                </button>
-              </div>
-            )}
+          {/* ヒント（よわい/ふつう限定・1局3回）。高さを常時確保してガタつきを防ぐ */}
+          {(difficulty === 'easy' || difficulty === 'normal') && !isFinished && (
+            <div className="text-center mt-2 h-8 flex items-center justify-center">
+              <button
+                onClick={handleHint}
+                disabled={!(phase === 'playing' && turn === WHITE && !thinking && hintsLeft > 0)}
+                className="btn btn-glass px-4 py-1.5 text-xs disabled:opacity-35"
+              >
+                💡 {hintsLeft > 0 ? `ヒント（あと${hintsLeft}回）` : 'ヒントを使い切った'}
+              </button>
+            </div>
+          )}
 
           <div className="hidden lg:block px-4 mt-8">
             <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
@@ -438,10 +464,26 @@ export default function CpuGame() {
         </div>
 
 
+        {/* 対局開始フラッシュ */}
+        {opening && (
+          <div key={opening.key} className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+            <div className="open-flash glass-light rounded-2xl px-8 py-4 text-center">
+              <p className="wordmark text-xl text-gray-900">対局開始</p>
+              <p className="text-sm text-gray-500 mt-0.5">あなたは白（先手）</p>
+            </div>
+          </div>
+        )}
+
         {isFinished && winner === WHITE && (
           <Confetti
             colors={difficulty === 'ultimate' ? ['#fbbf24', '#fff8e1'] : undefined}
+            count={purpleCount === 0 ? 40 : 20}
           />
+        )}
+
+        {/* リプレイ */}
+        {replayOpen && (
+          <Replay frames={framesRef.current} onClose={() => setReplayOpen(false)} />
         )}
 
         {isFinished && (
@@ -469,14 +511,24 @@ export default function CpuGame() {
                 </div>
               )}
 
+              {winner === WHITE && purpleCount === 0 && (
+                <div className="mb-5 rounded-xl bg-sky-50 border border-sky-300 px-4 py-2.5 text-sm font-bold text-sky-700">
+                  💎 パーフェクト！ 相手の石を全滅させた！
+                </div>
+              )}
+
               <div className="flex justify-center gap-10 mb-6">
                 <div>
                   <p className="text-xs text-gray-400">あなた（白）</p>
-                  <p className="text-3xl font-bold text-gray-900 tabular-nums">{whiteCount}</p>
+                  <p className="text-3xl font-bold text-gray-900 tabular-nums">
+                    <CountUp value={whiteCount} />
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">パプ子（紫）</p>
-                  <p className="text-3xl font-bold text-violet-600 tabular-nums">{purpleCount}</p>
+                  <p className="text-3xl font-bold text-violet-600 tabular-nums">
+                    <CountUp value={purpleCount} />
+                  </p>
                 </div>
               </div>
 
@@ -489,6 +541,12 @@ export default function CpuGame() {
                   className="btn w-full py-3 bg-gray-900 text-white hover:bg-gray-950"
                 >
                   難易度を変える
+                </button>
+                <button
+                  onClick={() => setReplayOpen(true)}
+                  className="btn w-full py-2 text-gray-500 hover:opacity-70"
+                >
+                  📼 リプレイを見る
                 </button>
                 <button onClick={() => router.push('/')} className="btn w-full py-2 text-violet-600 hover:opacity-70">
                   タイトルへ

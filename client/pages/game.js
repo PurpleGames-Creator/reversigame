@@ -7,6 +7,9 @@ import PlayerInfo from '../components/PlayerInfo';
 import Timer from '../components/Timer';
 import Confetti from '../components/Confetti';
 import SoundToggle from '../components/SoundToggle';
+import CountUp from '../components/CountUp';
+import EvalBar from '../components/EvalBar';
+import Replay from '../components/Replay';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 
 // 定型スタンプ（サーバー側のホワイトリストと揃える）
@@ -56,9 +59,14 @@ export default function GamePage() {
   const [opponentGone, setOpponentGone] = useState(false); // 相手が完全に退出済み
   const [spectatorCount, setSpectatorCount] = useState(0); // 観戦者数
   const [bubbles, setBubbles] = useState({}); // スタンプ吹き出し {playerId: {text, key}}
+  const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key, text}
+  const [flyStamp, setFlyStamp] = useState(null); // 送信スタンプの飛翔 {id, emoji, key}
+  const [replayOpen, setReplayOpen] = useState(false);
   const prevBoardRef = useRef(null);
   const noticeTimerRef = useRef(null);
   const bubbleTimersRef = useRef({});
+  const framesRef = useRef([]); // リプレイ用の盤面スナップショット
+  const openingTimerRef = useRef(null);
 
   const socket = initSocket();
 
@@ -92,6 +100,8 @@ export default function GamePage() {
 
     const handleGameStarted = (data) => {
       prevBoardRef.current = data.board;
+      framesRef.current = [{ board: data.board, lastMove: null }];
+      setReplayOpen(false);
       setGameState(data);
       setRematch('idle');
       setError(null);
@@ -101,6 +111,14 @@ export default function GamePage() {
       setSpectatorCount(data.spectatorCount ?? 0);
       syncDeadline(data);
       setLoading(false);
+      // 対局開始フラッシュ（自分の色を明示。観戦者には出さない）
+      if (!isSpectator) {
+        const mine =
+          data.player1?.id === socket.id ? 'あなたは白（先手）' : 'あなたは紫（後手）';
+        setOpening({ key: Date.now(), text: mine });
+        if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
+        openingTimerRef.current = setTimeout(() => setOpening(null), 1450);
+      }
     };
     const handleBoardUpdated = (data) => {
       // 前の盤面と比べて置いた＋裏返った音を鳴らす
@@ -109,6 +127,7 @@ export default function GamePage() {
       if (changed > 0) {
         playPlace();
         playFlips(changed - 1);
+        framesRef.current.push({ board: data.board, lastMove: data.lastMove || null });
       }
       setGameState((prev) => ({
         ...prev,
@@ -127,6 +146,7 @@ export default function GamePage() {
       if (changed > 0) {
         playPlace();
         playFlips(changed - 1);
+        framesRef.current.push({ board: data.board, lastMove: data.lastMove || null });
       }
       setGameState((prev) => ({
         ...prev,
@@ -291,6 +311,7 @@ export default function GamePage() {
       socket.off('disconnect', handleDisconnect);
       socket.off('connect', handleReconnect);
       if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+      if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
       Object.values(bubbleTimersRef.current).forEach(clearTimeout);
       clearTimeout(bootTimeout);
     };
@@ -334,6 +355,9 @@ export default function GamePage() {
     if (now - stampCooldownRef.current < 1500) return;
     stampCooldownRef.current = now;
     socket.emit('send-stamp', { roomId, stamp: stampId });
+    // 押したボタンから絵文字がふわっと飛ぶ（送った感）
+    const def = STAMP_DEFS.find((d) => d.id === stampId);
+    if (def) setFlyStamp({ id: stampId, emoji: def.emoji, key: now });
   };
 
   if (loading && !gameState) {
@@ -426,6 +450,8 @@ export default function GamePage() {
                 </span>
               )}
               <Timer deadline={deadline} />
+              {/* 観戦者だけの形勢グラフ（対局者にはヒントになるので見せない） */}
+              <EvalBar board={gameState.board} className="mt-1.5" />
               {spectatorCount > 0 && (
                 <p className="text-[11px] text-white/60">👀 {spectatorCount}人が観戦中</p>
               )}
@@ -457,9 +483,14 @@ export default function GamePage() {
                   <button
                     key={s.id}
                     onClick={() => handleSendStamp(s.id)}
-                    className="glass rounded-full px-3 py-1.5 hover:bg-white/15 active:scale-95 transition"
+                    className="relative glass rounded-full px-3 py-1.5 hover:bg-white/15 active:scale-95 transition"
                     title={s.label}
                   >
+                    {flyStamp && flyStamp.id === s.id && (
+                      <span key={flyStamp.key} className="stamp-fly text-xl">
+                        {flyStamp.emoji}
+                      </span>
+                    )}
                     <span className="text-[14px]">{s.emoji}</span>
                     <span className="text-[11px] text-white/80 ml-1">{s.label}</span>
                   </button>
@@ -505,7 +536,32 @@ export default function GamePage() {
         )}
 
 
-        {isFinished && gameState.winner === socket.id && !isSpectator && <Confetti />}
+        {/* 対局開始フラッシュ（自分の色を明示） */}
+        {opening && (
+          <div key={opening.key} className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+            <div className="open-flash glass-light rounded-2xl px-8 py-4 text-center">
+              <p className="wordmark text-xl text-gray-900">対局開始</p>
+              <p className="text-sm text-gray-500 mt-0.5">{opening.text}</p>
+            </div>
+          </div>
+        )}
+
+        {isFinished && gameState.winner === socket.id && !isSpectator && (
+          <Confetti
+            count={
+              (gameState.winner === gameState.player1?.id
+                ? gameState.player2?.pieces
+                : gameState.player1?.pieces) === 0
+                ? 40
+                : 20
+            }
+          />
+        )}
+
+        {/* リプレイ */}
+        {replayOpen && (
+          <Replay frames={framesRef.current} onClose={() => setReplayOpen(false)} />
+        )}
 
         {isFinished && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -534,17 +590,25 @@ export default function GamePage() {
                 <div className="mb-3" />
               )}
 
+              {/* パーフェクト勝ち（片方が全滅） */}
+              {gameState.winner !== 'draw' &&
+                (gameState.player1?.pieces === 0 || gameState.player2?.pieces === 0) && (
+                  <div className="mb-4 rounded-xl bg-sky-50 border border-sky-300 px-4 py-2.5 text-sm font-bold text-sky-700">
+                    💎 パーフェクト！ 石を全滅させた圧勝！
+                  </div>
+                )}
+
               <div className="flex justify-center gap-10 mb-6">
                 <div>
                   <p className="text-xs text-gray-400">白</p>
                   <p className="text-3xl font-bold text-gray-900 tabular-nums">
-                    {gameState.player1?.pieces || 0}
+                    <CountUp value={gameState.player1?.pieces || 0} />
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">紫</p>
                   <p className="text-3xl font-bold text-violet-600 tabular-nums">
-                    {gameState.player2?.pieces || 0}
+                    <CountUp value={gameState.player2?.pieces || 0} />
                   </p>
                 </div>
               </div>
@@ -574,6 +638,12 @@ export default function GamePage() {
                     同じ相手ともう一度
                   </button>
                 )}
+                <button
+                  onClick={() => setReplayOpen(true)}
+                  className="btn w-full py-2 text-gray-500 hover:opacity-70"
+                >
+                  📼 リプレイを見る
+                </button>
                 {!isSpectator && (
                   <button
                     onClick={handleLeaveRoom}

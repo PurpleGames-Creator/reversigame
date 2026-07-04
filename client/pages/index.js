@@ -16,6 +16,18 @@ function LockIcon({ size = 18 }) {
   );
 }
 
+// タイトルのパプ子をタップした時のセリフ（ツンデレ）
+const PAPUKO_TAP_LINES = [
+  'な、なに？ 対戦したいの？',
+  'べ、別にあなたを待ってたわけじゃないし',
+  'ふふん、私に勝てると思ってるの？',
+  '…あんまりつつかないでよね',
+  '勝負しないなら帰っていいのよ？',
+  'ひまなの？ …まあ、私もだけど',
+];
+// レア（低確率）
+const PAPUKO_RARE_LINE = '……ちょっとだけ、来るの待ってた';
+
 // 数値が変わったら現在の表示値からカウントアップ/ダウンして追いつくアニメーション
 function useCountUp(target, duration = 700) {
   const [display, setDisplay] = useState(0);
@@ -53,6 +65,27 @@ export default function TitleScreen() {
   const [onlineCount, setOnlineCount] = useState(0);
   // サーバーは接続中の全クライアント数を配信するので、自分の1人分を引いて表示
   const shownOnline = useCountUp(Math.max(0, onlineCount - 1));
+  const [papukoTap, setPapukoTap] = useState(null); // {text, key}
+  const papukoTapTimerRef = useRef(null);
+  const lastTapLineRef = useRef(-1);
+
+  // パプ子タップ：ぴょこんと跳ねてツンデレの一言（同じセリフの連続は避ける）
+  const handlePapukoTap = () => {
+    let text;
+    if (Math.random() < 0.08) {
+      text = PAPUKO_RARE_LINE;
+    } else {
+      let i;
+      do {
+        i = Math.floor(Math.random() * PAPUKO_TAP_LINES.length);
+      } while (i === lastTapLineRef.current);
+      lastTapLineRef.current = i;
+      text = PAPUKO_TAP_LINES[i];
+    }
+    if (papukoTapTimerRef.current) clearTimeout(papukoTapTimerRef.current);
+    setPapukoTap({ text, key: Date.now() });
+    papukoTapTimerRef.current = setTimeout(() => setPapukoTap(null), 2600);
+  };
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [panel, setPanel] = useState(null); // null | 'random' | 'private'
@@ -215,22 +248,45 @@ export default function TitleScreen() {
             )}
             <div className="space-y-2.5 max-h-[50vh] overflow-y-auto">
               {liveGames.length > 0 ? (
-                liveGames.map((g) => (
-                  <button
-                    key={g.roomId}
-                    onClick={() => handleSpectate(g.roomId)}
-                    className="w-full rounded-2xl px-4 py-3 bg-violet-50 hover:bg-violet-100 transition-colors flex items-center justify-between gap-3"
-                  >
-                    <span className="text-sm font-semibold text-gray-800 truncate">
-                      <span className="text-gray-900">{g.player1}</span>
-                      <span className="text-gray-400 font-normal"> vs </span>
-                      <span className="text-violet-700">{g.player2}</span>
-                    </span>
-                    <span className="shrink-0 text-xs font-bold text-white bg-violet-600 rounded-full px-3 py-1.5">
-                      観戦
-                    </span>
-                  </button>
-                ))
+                liveGames.map((g) => {
+                  const stage =
+                    typeof g.moves === 'number'
+                      ? g.moves <= 15
+                        ? '序盤'
+                        : g.moves <= 40
+                          ? '中盤'
+                          : '終盤'
+                      : null;
+                  return (
+                    <button
+                      key={g.roomId}
+                      onClick={() => handleSpectate(g.roomId)}
+                      className="w-full rounded-2xl px-4 py-3 bg-violet-50 hover:bg-violet-100 transition-colors flex items-center justify-between gap-3"
+                    >
+                      <span className="min-w-0 text-left">
+                        <span className="block text-sm font-semibold text-gray-800 truncate">
+                          <span className="text-gray-900">{g.player1}</span>
+                          {typeof g.pieces1 === 'number' && (
+                            <span className="tabular-nums text-gray-700"> {g.pieces1}</span>
+                          )}
+                          <span className="text-gray-400 font-normal"> vs </span>
+                          {typeof g.pieces2 === 'number' && (
+                            <span className="tabular-nums text-violet-600">{g.pieces2} </span>
+                          )}
+                          <span className="text-violet-700">{g.player2}</span>
+                        </span>
+                        {stage && (
+                          <span className="block text-[11px] text-gray-400 tabular-nums">
+                            {g.moves}手目・{stage}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-xs font-bold text-white bg-violet-600 rounded-full px-3 py-1.5">
+                        観戦
+                      </span>
+                    </button>
+                  );
+                })
               ) : (
                 <p className="text-center text-sm text-gray-500 py-8">
                   いま対戦中の試合はありません
@@ -288,14 +344,26 @@ export default function TitleScreen() {
         }`}
       >
         <div className="w-full max-w-sm flex flex-col items-center">
-          {/* マスコット＋背景のリバーシ盤 */}
+          {/* マスコット＋背景のリバーシ盤（タップで反応） */}
           <div className="relative animate-rise" style={{ width: 200, height: 200 }}>
             <div className="absolute inset-0 flex items-center justify-center">
               <BoardBackdrop size={200} />
             </div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Papuko size={104} float glow />
-            </div>
+            <button
+              onClick={handlePapukoTap}
+              aria-label="パプ子"
+              className="absolute inset-0 flex items-center justify-center focus:outline-none"
+              data-no-uisound
+            >
+              <span key={papukoTap?.key ?? 'idle'} className={papukoTap ? 'papuko-bounce' : ''}>
+                <Papuko size={104} float glow />
+              </span>
+            </button>
+            {papukoTap && (
+              <div key={`b-${papukoTap.key}`} className="stamp-bubble" style={{ top: 6 }}>
+                {papukoTap.text}
+              </div>
+            )}
           </div>
 
           {/* タイトル */}

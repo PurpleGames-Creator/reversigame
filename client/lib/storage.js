@@ -61,6 +61,32 @@ export const getCpuRecords = () => {
   }
 };
 
+// CPU戦の現在の連勝数 { easy: n, ... }（勝ちで+1、負け/引き分けで0にリセット）
+export const getCpuStreaks = () => {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  try {
+    return JSON.parse(localStorage.getItem('cpuStreaks') || '{}');
+  } catch (e) {
+    return {};
+  }
+};
+
+export const bumpCpuStreak = (difficulty, won) => {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
+  const streaks = getCpuStreaks();
+  streaks[difficulty] = won ? (streaks[difficulty] || 0) + 1 : 0;
+  try {
+    localStorage.setItem('cpuStreaks', JSON.stringify(streaks));
+  } catch (e) {
+    /* ignore */
+  }
+  return streaks[difficulty];
+};
+
 export const recordCpuResult = (difficulty, result) => {
   // result: 'w'(勝ち) | 'l'(負け) | 'd'(引き分け)
   if (typeof window === 'undefined') {
