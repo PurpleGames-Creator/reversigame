@@ -732,6 +732,11 @@ function registerSocketHandlers(io) {
       }
     });
   });
+
+  // HTTPルート(/online)などから参照するための読み取り専用API
+  return {
+    getOnlineCount: () => connectedIds.size,
+  };
 }
 
 // 募集中/対戦中/オンライン人数をまとめる

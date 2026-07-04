@@ -35,13 +35,18 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json());
 
+// Register Socket.io event handlers
+const handlersApi = registerSocketHandlers(io);
+
 // Routes
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Register Socket.io event handlers
-registerSocketHandlers(io);
+// 現在の接続人数（Purple Park HPの「現在〇人がオンライン」表示用）
+app.get('/online', (req, res) => {
+  res.json({ count: handlersApi.getOnlineCount() });
+});
 
 // Start server
 const PORT = process.env.PORT || 3001;
