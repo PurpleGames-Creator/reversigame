@@ -35,17 +35,6 @@ import {
 const YOU = { id: 'you', name: 'あなた' };
 const CPU = { id: 'papuko', name: 'パプ子' };
 
-// 対局開始時のパプ子のあいさつ
-const GREETINGS = {
-  easy: 'よろしくね♪',
-  normal: '油断したら知らないからね',
-  hard: '本気でいくよ',
-  ultimate: '……ついてこれる？',
-};
-
-const isCorner = (mv) =>
-  mv && (mv.row === 0 || mv.row === 7) && (mv.col === 0 || mv.col === 7);
-
 const DIFFICULTIES = [
   { key: 'easy', label: 'よわい', desc: '手加減してくれてもいいよ', dot: '#38bdf8' },
   { key: 'normal', label: 'ふつう', desc: '油断したら知らないからね', dot: '#fbbf24' },
@@ -72,16 +61,12 @@ export default function CpuGame() {
   const [records, setRecords] = useState({});
   const [hintsLeft, setHintsLeft] = useState(3);
   const [hintCell, setHintCell] = useState(null);
-  const [papukoLine, setPapukoLine] = useState(null); // パプ子のセリフ（一時表示）
   const [streaks, setStreaks] = useState({});
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key}
   const [replayOpen, setReplayOpen] = useState(false);
 
   const framesRef = useRef([]); // リプレイ用の盤面スナップショット
   const openingTimerRef = useRef(null);
-  const papukoTimerRef = useRef(null);
-  const leadSaidRef = useRef(false); // 「いい感じかも」を言ったか（1局1回）
-  const behindSaidRef = useRef(false); // 「まだ負けてない」を言ったか（1局1回）
   const aiWorkerRef = useRef(null); // Web Worker（false=生成失敗→同期フォールバック）
   const aiReqRef = useRef(0);
 
@@ -99,13 +84,6 @@ export default function CpuGame() {
     },
     []
   );
-
-  // パプ子のセリフを2.6秒だけ表示
-  const say = useCallback((text) => {
-    if (papukoTimerRef.current) clearTimeout(papukoTimerRef.current);
-    setPapukoLine(text);
-    papukoTimerRef.current = setTimeout(() => setPapukoLine(null), 2600);
-  }, []);
 
   // AIの思考。Web Worker で計算してUIを固めない（使えない環境は同期にフォールバック）
   const computeMove = useCallback((b, color, diff) => {
@@ -168,33 +146,29 @@ export default function CpuGame() {
       setMessage(null);
       setHintsLeft(3);
       setHintCell(null);
-      leadSaidRef.current = false;
-      behindSaidRef.current = false;
       setPhase('playing');
       // 対局開始フラッシュ（1.6秒で自動消滅）
       setOpening({ key: Date.now() });
       if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
       openingTimerRef.current = setTimeout(() => setOpening(null), 1650);
-      say(GREETINGS[diff] || 'よろしくね♪');
     },
-    [say]
+    []
   );
 
   const backToSelect = useCallback(() => {
     setPhase('select');
     setMessage(null);
-    setPapukoLine(null);
   }, []);
 
-  // ヒント：つよいAIの手を1つ光らせる（よわい/ふつう限定・1局3回）
+  // ヒント：つよいAIの手を1つ光らせる（よわい/ふつう限定・1局3回・1手につき1回）
   const handleHint = useCallback(() => {
-    if (hintsLeft <= 0) return;
+    if (hintsLeft <= 0 || hintCell) return; // 表示中の連打は消費しない
     const mv = chooseMove(board, WHITE, 'hard');
     if (mv) {
       setHintCell(mv);
       setHintsLeft((n) => n - 1);
     }
-  }, [board, hintsLeft]);
+  }, [board, hintsLeft, hintCell]);
 
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -250,23 +224,6 @@ export default function CpuGame() {
             setLastMove(mv);
             playPlace();
             playFlips(flipped);
-
-            // 状況に応じたパプ子のセリフ
-            if (isCorner(mv)) {
-              say('角、もーらい♪');
-            } else {
-              const w = countPieces(next, WHITE);
-              const p = countPieces(next, PURPLE);
-              if (w + p >= 20) {
-                if (p - w >= 8 && !leadSaidRef.current) {
-                  leadSaidRef.current = true;
-                  say('ふふ、いい感じかも');
-                } else if (w - p >= 8 && !behindSaidRef.current) {
-                  behindSaidRef.current = true;
-                  say('まだ負けてないから…！');
-                }
-              }
-            }
           }
           setThinking(false);
           setTurn(WHITE);
@@ -277,7 +234,7 @@ export default function CpuGame() {
         clearTimeout(t);
       };
     }
-  }, [board, turn, phase, difficulty, ultimateUnlocked, ultimateBeaten, computeMove, say]);
+  }, [board, turn, phase, difficulty, ultimateUnlocked, ultimateBeaten, computeMove]);
 
   const handleCellClick = (row, col) => {
     if (phase !== 'playing' || turn !== WHITE || thinking) return;
@@ -291,7 +248,6 @@ export default function CpuGame() {
     setLastMove({ row, col });
     playPlace();
     playFlips(flipped);
-    if (isCorner({ row, col })) say('あーっ！角とられた！');
     setTurn(PURPLE);
   };
 
@@ -416,7 +372,10 @@ export default function CpuGame() {
             {(difficulty === 'easy' || difficulty === 'normal') && !isFinished && (
               <button
                 onClick={handleHint}
-                disabled={!(phase === 'playing' && turn === WHITE && !thinking && hintsLeft > 0)}
+                disabled={
+                  !(phase === 'playing' && turn === WHITE && !thinking && hintsLeft > 0) ||
+                  !!hintCell
+                }
                 title={hintsLeft > 0 ? `ヒント（あと${hintsLeft}回）` : 'ヒントを使い切った'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 btn btn-glass px-3 py-1 text-xs disabled:opacity-35 tabular-nums"
               >
@@ -426,10 +385,6 @@ export default function CpuGame() {
             {message ? (
               <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
                 {message}
-              </span>
-            ) : papukoLine ? (
-              <span className="text-sm font-medium text-violet-100 bg-violet-600/60 rounded-full px-4 py-1.5">
-                💬 {papukoLine}
               </span>
             ) : thinking ? (
               <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
