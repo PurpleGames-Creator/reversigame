@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { initSocket } from '../lib/socket';
+import { playMatch } from '../lib/sound';
 import { getPlayerName, setPlayerName } from '../lib/storage';
 import Papuko from '../components/Papuko';
 import BoardBackdrop from '../components/BoardBackdrop';
@@ -157,6 +158,8 @@ export default function TitleScreen() {
   const matchTimersRef = useRef([]);
   const [spectateOpen, setSpectateOpen] = useState(false);
   const [liveGames, setLiveGames] = useState([]);
+  const [waitingList, setWaitingList] = useState([]); // ランダムマッチ待機中の人
+  const [challengeError, setChallengeError] = useState(null);
   const [onlineOpen, setOnlineOpen] = useState(true); // 開催時間内か（初期はSSR差異回避でtrue）
   const [hoursOpen, setHoursOpen] = useState(false); // 開催時間の案内ポップアップ
   const [champion, setChampion] = useState(null); // 夜間王者 {name, wins}
@@ -211,18 +214,35 @@ export default function TitleScreen() {
     const savedName = getPlayerName();
     if (savedName) setLocalPlayerName(savedName);
 
-    setConnected(socket.connected);
-    const handleConnect = () => setConnected(true);
-    const handleDisconnect = () => setConnected(false);
     const handleCount = (data) =>
       setOnlineCount(typeof data === 'number' ? data : data?.onlineCount ?? 0);
     const handleRooms = (data) => setLiveGames(data?.playing || []);
     const handleChampion = (data) => {
       setChampion(data && data.name ? { name: data.name, wins: data.wins } : null);
     };
-    // マッチ成立：即遷移せず「相手が見つかりました→マッチング中」と進捗を見せてから対局へ
+    const handleQueue = (data) => setWaitingList(data?.waiting || []);
+    // タイトルへ戻ってきた時などに人数・王者・待機列・対戦一覧をまとめて取り直す
+    // （online-count-updated は接続/切断時にしか飛ばないため、これが無いと0人表示のままになる）
+    const seed = () => {
+      socket.emit('get-rooms', (res) => {
+        if (!res) return;
+        if (typeof res.onlineCount === 'number') setOnlineCount(res.onlineCount);
+        setLiveGames(res.playing || []);
+        setWaitingList(res.queue || []);
+        handleChampion(res.champion);
+      });
+    };
+    setConnected(socket.connected);
+    if (socket.connected) seed();
+    const handleConnect = () => {
+      setConnected(true);
+      seed();
+    };
+    const handleDisconnect = () => setConnected(false);
+    // マッチ成立：ピコーンと鳴らし、「相手が見つかりました→マッチング中」と進捗を見せてから対局へ
     const handleMatched = ({ roomId } = {}) => {
       if (!roomId) return;
+      playMatch();
       setMatchPhase('found');
       matchTimersRef.current.forEach(clearTimeout);
       matchTimersRef.current = [
@@ -237,6 +257,7 @@ export default function TitleScreen() {
     socket.on('rooms-updated', handleRooms);
     socket.on('matched', handleMatched);
     socket.on('night-champion', handleChampion);
+    socket.on('queue-updated', handleQueue);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -245,6 +266,7 @@ export default function TitleScreen() {
       socket.off('rooms-updated', handleRooms);
       socket.off('matched', handleMatched);
       socket.off('night-champion', handleChampion);
+      socket.off('queue-updated', handleQueue);
       matchTimersRef.current.forEach(clearTimeout);
     };
   }, [socket, router]);
@@ -341,6 +363,34 @@ export default function TitleScreen() {
     });
   };
 
+  // 待機中の相手を指名して対戦（同じ人との自動マッチ連発を避けられる）
+  const handleChallenge = (target) => {
+    if (!playerName.trim() || loading || matching) return;
+    if (!isOnlineHours()) {
+      setHoursOpen(true);
+      return;
+    }
+    setChallengeError(null);
+    setLoading(true);
+    socket.emit('register', playerName.trim(), (res) => {
+      if (!(res && res.success)) {
+        setLoading(false);
+        return;
+      }
+      setPlayerName(playerName.trim());
+      setLoading(false);
+      setMatchMode('random');
+      setMatchPhase('searching');
+      setMatching(true);
+      socket.emit('find-match-with', { targetId: target.id }, (res2) => {
+        if (res2 && res2.success === false) {
+          setMatching(false);
+          setChallengeError(res2.error || 'マッチングできませんでした');
+        }
+      });
+    });
+  };
+
   const handleCancelMatch = () => {
     if (matchPhase !== 'searching') return; // マッチ成立後はキャンセル不可
     if (matchMode === 'private') socket.emit('cancel-private', { code: privateCode.trim() });
@@ -412,7 +462,7 @@ export default function TitleScreen() {
                       className="w-full rounded-2xl px-4 py-3 bg-violet-50 hover:bg-violet-100 transition-colors flex items-center justify-between gap-3"
                     >
                       <span className="min-w-0 text-left">
-                        <span className="block text-sm font-semibold text-gray-800 truncate">
+                        <span className="block text-sm font-semibold text-gray-800 break-words leading-snug">
                           <span className="text-gray-900">{g.player1}</span>
                           {typeof g.pieces1 === 'number' && (
                             <span className="tabular-nums text-gray-700"> {g.pieces1}</span>
@@ -670,6 +720,37 @@ export default function TitleScreen() {
                   サーバーを起こしています…<br />
                   初回は最大50秒ほどかかります
                 </p>
+              )}
+
+              {/* いま待っている人（指名して対戦できる） */}
+              {waitingList.filter((w) => w.id !== socket.id).length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-[11px] text-white/60">
+                    いま待っている人（選んで対戦できます）
+                  </p>
+                  {waitingList
+                    .filter((w) => w.id !== socket.id)
+                    .map((w) => (
+                      <div
+                        key={w.id}
+                        className="flex items-center justify-between gap-3 rounded-2xl bg-white/10 px-4 py-2.5"
+                      >
+                        <span className="min-w-0 text-sm font-semibold text-white break-words">
+                          {w.name}
+                        </span>
+                        <button
+                          onClick={() => handleChallenge(w)}
+                          disabled={!playerName.trim() || loading || matching}
+                          className="shrink-0 text-xs font-bold text-white bg-violet-600 hover:bg-violet-500 rounded-full px-3.5 py-1.5 disabled:opacity-40"
+                        >
+                          この人と対戦
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {challengeError && (
+                <p className="text-xs text-rose-300 text-center">{challengeError}</p>
               )}
             </div>
           )}

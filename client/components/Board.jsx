@@ -21,8 +21,8 @@ const THEMES = {
   },
 };
 
-export default function Board({ board, legalMoves, lastMove, onCellClick, finished, hintCell, theme = 'purple' }) {
-  const t = THEMES[theme] || THEMES.purple;
+export default function Board({ board, legalMoves, lastMove, onCellClick, finished, hintCell, theme = 'green' }) {
+  const t = THEMES[theme] || THEMES.green;
   const handleCellClick = (row, col) => {
     if (onCellClick && !board[row][col] && legalMoves.includes(`${row},${col}`)) {
       onCellClick(row, col);

@@ -1,6 +1,6 @@
 import { getBoardTheme, setBoardTheme } from '../lib/storage';
 
-const ORDER = ['purple', 'green', 'wood'];
+const ORDER = ['green', 'purple', 'wood'];
 const LABELS = { purple: '紫', green: 'クラシック緑', wood: '木目' };
 
 // 盤面テーマの切り替え（🎨タップで 紫→緑→木目 を循環。SoundToggleの左隣に固定）

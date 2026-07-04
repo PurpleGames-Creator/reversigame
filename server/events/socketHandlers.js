@@ -264,6 +264,13 @@ function registerSocketHandlers(io) {
   // 定型スタンプ（自由入力は受け付けない）
   const STAMPS = new Set(['yoroshiku', 'umm', 'wow', 'gg']);
 
+  // ランダムマッチ待機列の公開（トップの「いま待っている人」一覧用）
+  const queueList = () =>
+    matchQueue
+      .filter((id) => io.sockets.sockets.get(id))
+      .map((id) => ({ id, name: playerNames.get(id) || 'Player' }));
+  const emitQueue = () => io.emit('queue-updated', { waiting: queueList() });
+
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
     connectedIds.add(socket.id);
@@ -283,9 +290,15 @@ function registerSocketHandlers(io) {
     });
 
     // ---- get-rooms -------------------------------------------------------
+    // タイトル画面へ戻った時の再取得にも使うため、人数・王者・待機列も同梱する
     socket.on('get-rooms', (callback) => {
       try {
-        if (callback) callback(buildRoomsPayload(roomManager, playerNames, connectedIds.size));
+        if (callback)
+          callback({
+            ...buildRoomsPayload(roomManager, playerNames, connectedIds.size),
+            champion: championPayload(),
+            queue: queueList(),
+          });
       } catch (error) {
         console.error('get-rooms error:', error);
         if (callback) callback({ error: error.message });
@@ -351,10 +364,12 @@ function registerSocketHandlers(io) {
           startGame(room);
           emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
 
+          emitQueue();
           if (callback) callback({ success: true, matched: true, roomId });
         } else {
           // 相手が居なければ待機列へ
           matchQueue.push(socket.id);
+          emitQueue();
           if (callback) callback({ success: true, matched: false });
         }
       } catch (error) {
@@ -363,9 +378,54 @@ function registerSocketHandlers(io) {
       }
     });
 
+    // ---- find-match-with（待機中の相手を指名して対戦） --------------------
+    socket.on('find-match-with', (payload, callback) => {
+      try {
+        if (!isOnlineHours()) {
+          throw new Error('オンライン対戦は毎日21:00〜24:00に開催しています');
+        }
+        const name = playerNames.get(socket.id);
+        if (!name) throw new Error('Player not registered');
+
+        const targetId = payload && payload.targetId;
+        const idx = matchQueue.indexOf(targetId);
+        const targetSock = io.sockets.sockets.get(targetId);
+        if (!targetId || targetId === socket.id || idx === -1 || !targetSock) {
+          throw new Error('その相手はすでにマッチングしたか、退出しました');
+        }
+
+        matchQueue.splice(idx, 1);
+        matchQueue = matchQueue.filter((id) => id !== socket.id); // 自分が並んでいたら外す
+
+        // コイントス：先手(白)=host をランダムに決める
+        const targetName = playerNames.get(targetId) || 'Player';
+        const waiter = { id: targetId, name: targetName, sock: targetSock };
+        const comer = { id: socket.id, name, sock: socket };
+        const [hostP, guestP] = Math.random() < 0.5 ? [waiter, comer] : [comer, waiter];
+        const roomId = roomManager.createRoom(hostP.id, hostP.name, tokenOf(hostP.sock));
+        if (hostP.sock) hostP.sock.join(roomId);
+        const room = roomManager.joinRoom(roomId, guestP.id, guestP.name, tokenOf(guestP.sock));
+        if (guestP.sock) guestP.sock.join(roomId);
+        room.lastMove = null;
+        room.mode = 'random';
+        console.log(`Match-with: ${hostP.name}(白) vs ${guestP.name} (${roomId})`);
+
+        io.to(roomId).emit('matched', { roomId });
+        startGame(room);
+        emitQueue();
+        emitRoomsUpdated(io, roomManager, playerNames, connectedIds.size);
+
+        if (callback) callback({ success: true, matched: true, roomId });
+      } catch (error) {
+        console.error('find-match-with error:', error.message);
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
     // ---- cancel-match ----------------------------------------------------
     socket.on('cancel-match', (callback) => {
       matchQueue = matchQueue.filter((id) => id !== socket.id);
+      emitQueue();
       if (callback) callback({ success: true });
     });
 
@@ -685,7 +745,9 @@ function registerSocketHandlers(io) {
     socket.on('disconnect', () => {
       try {
         console.log(`User disconnected: ${socket.id}`);
+        const wasQueued = matchQueue.includes(socket.id);
         matchQueue = matchQueue.filter((id) => id !== socket.id);
+        if (wasQueued) emitQueue();
         for (const [k, v] of privateWaiting) {
           if (v === socket.id) privateWaiting.delete(k);
         }

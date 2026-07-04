@@ -64,7 +64,7 @@ export default function CpuGame() {
   const [hintCell, setHintCell] = useState(null);
   const [streaks, setStreaks] = useState({});
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key}
-  const [boardTheme, setBoardThemeState] = useState('purple');
+  const [boardTheme, setBoardThemeState] = useState('green');
 
   const openingTimerRef = useRef(null);
   const aiWorkerRef = useRef(null); // Web Worker（false=生成失敗→同期フォールバック）

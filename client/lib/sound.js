@@ -132,6 +132,30 @@ export function playClick() {
   osc.stop(t0 + 0.05);
 }
 
+// マッチング成立の「ピコーン」（上昇2音のチャイム。気づかせるためやや大きめ）
+export function playMatch() {
+  if (muted) return;
+  const c = getCtx();
+  if (!c) return;
+  const notes = [
+    { freq: 659, when: 0, dur: 0.14, gain: 0.3 },
+    { freq: 988, when: 0.12, dur: 0.45, gain: 0.34 },
+  ];
+  for (const n of notes) {
+    const t0 = c.currentTime + n.when;
+    const osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(n.freq, t0);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(n.gain, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + n.dur);
+    osc.connect(g).connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + n.dur + 0.05);
+  }
+}
+
 // 残り時間わずかの「コッ」という小さな警告音（タイマー用）
 export function playTick() {
   if (muted) return;

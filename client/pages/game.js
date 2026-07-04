@@ -62,7 +62,7 @@ export default function GamePage() {
   const [bubbles, setBubbles] = useState({}); // スタンプ吹き出し {playerId: {text, key}}
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key, text}
   const [flyStamp, setFlyStamp] = useState(null); // 送信スタンプの飛翔 {id, emoji, key}
-  const [boardTheme, setBoardThemeState] = useState('purple');
+  const [boardTheme, setBoardThemeState] = useState('green');
   const prevBoardRef = useRef(null);
   const noticeTimerRef = useRef(null);
   const bubbleTimersRef = useRef({});

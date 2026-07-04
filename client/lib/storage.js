@@ -49,13 +49,13 @@ export const markUltimateBeaten = () => {
   localStorage.setItem('ultimateBeaten', '1');
 };
 
-// 盤面テーマ（purple | green | wood）
+// 盤面テーマ（green | purple | wood）。既定はクラシック緑
 export const getBoardTheme = () => {
   if (typeof window === 'undefined') {
-    return 'purple';
+    return 'green';
   }
   const t = localStorage.getItem('boardTheme');
-  return t === 'green' || t === 'wood' ? t : 'purple';
+  return t === 'purple' || t === 'wood' ? t : 'green';
 };
 
 export const setBoardTheme = (theme) => {
