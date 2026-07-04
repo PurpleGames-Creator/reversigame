@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Board from '../components/Board';
@@ -16,12 +16,31 @@ import {
   WHITE,
   PURPLE,
 } from '../lib/reversi';
+import SoundToggle from '../components/SoundToggle';
 import { chooseMove } from '../lib/ai';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
-import { isUltimateUnlocked, unlockUltimate } from '../lib/storage';
+import {
+  isUltimateUnlocked,
+  unlockUltimate,
+  isUltimateBeaten,
+  markUltimateBeaten,
+  getCpuRecords,
+  recordCpuResult,
+} from '../lib/storage';
 
 const YOU = { id: 'you', name: 'あなた' };
 const CPU = { id: 'papuko', name: 'パプ子' };
+
+// 対局開始時のパプ子のあいさつ
+const GREETINGS = {
+  easy: 'よろしくね♪',
+  normal: '油断したら知らないからね',
+  hard: '本気でいくよ',
+  ultimate: '……ついてこれる？',
+};
+
+const isCorner = (mv) =>
+  mv && (mv.row === 0 || mv.row === 7) && (mv.col === 0 || mv.col === 7);
 
 const DIFFICULTIES = [
   { key: 'easy', label: 'よわい', desc: '手加減してくれてもいいよ', dot: '#38bdf8' },
@@ -44,28 +63,121 @@ export default function CpuGame() {
   const [message, setMessage] = useState(null);
   const [ultimateUnlocked, setUltimateUnlocked] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState(false);
+  const [ultimateBeaten, setUltimateBeaten] = useState(false);
+  const [justBeatUltimate, setJustBeatUltimate] = useState(false);
+  const [records, setRecords] = useState({});
+  const [hintsLeft, setHintsLeft] = useState(3);
+  const [hintCell, setHintCell] = useState(null);
+  const [papukoLine, setPapukoLine] = useState(null); // パプ子のセリフ（一時表示）
+
+  const papukoTimerRef = useRef(null);
+  const leadSaidRef = useRef(false); // 「いい感じかも」を言ったか（1局1回）
+  const behindSaidRef = useRef(false); // 「まだ負けてない」を言ったか（1局1回）
+  const aiWorkerRef = useRef(null); // Web Worker（false=生成失敗→同期フォールバック）
+  const aiReqRef = useRef(0);
 
   useEffect(() => {
     setUltimateUnlocked(isUltimateUnlocked());
+    setUltimateBeaten(isUltimateBeaten());
+    setRecords(getCpuRecords());
   }, []);
 
-  const startGame = useCallback((diff) => {
-    unlockAudio();
-    setJustUnlocked(false);
-    setDifficulty(diff);
-    setBoard(createInitialBoard());
-    setTurn(WHITE);
-    setLastMove(null);
-    setWinner(null);
-    setThinking(false);
-    setMessage(null);
-    setPhase('playing');
+  // アンマウント時にAIワーカーを破棄
+  useEffect(
+    () => () => {
+      if (aiWorkerRef.current) aiWorkerRef.current.terminate();
+    },
+    []
+  );
+
+  // パプ子のセリフを2.6秒だけ表示
+  const say = useCallback((text) => {
+    if (papukoTimerRef.current) clearTimeout(papukoTimerRef.current);
+    setPapukoLine(text);
+    papukoTimerRef.current = setTimeout(() => setPapukoLine(null), 2600);
   }, []);
+
+  // AIの思考。Web Worker で計算してUIを固めない（使えない環境は同期にフォールバック）
+  const computeMove = useCallback((b, color, diff) => {
+    return new Promise((resolve) => {
+      if (aiWorkerRef.current === null) {
+        try {
+          aiWorkerRef.current = new Worker(new URL('../lib/ai.worker.js', import.meta.url));
+        } catch (e) {
+          aiWorkerRef.current = false;
+        }
+      }
+      const w = aiWorkerRef.current;
+      if (!w) {
+        resolve(chooseMove(b, color, diff));
+        return;
+      }
+      const id = ++aiReqRef.current;
+      const fallback = () => {
+        w.removeEventListener('message', onMsg);
+        w.removeEventListener('error', onErr);
+        clearTimeout(guard);
+        resolve(chooseMove(b, color, diff));
+      };
+      const onMsg = (e) => {
+        if (!e.data || e.data.id !== id) return;
+        if (e.data.error) {
+          fallback();
+          return;
+        }
+        w.removeEventListener('message', onMsg);
+        w.removeEventListener('error', onErr);
+        clearTimeout(guard);
+        resolve(e.data.mv);
+      };
+      const onErr = () => {
+        aiWorkerRef.current = false; // 以後は同期で
+        fallback();
+      };
+      const guard = setTimeout(onErr, 8000);
+      w.addEventListener('message', onMsg);
+      w.addEventListener('error', onErr);
+      w.postMessage({ id, board: b, color, difficulty: diff });
+    });
+  }, []);
+
+  const startGame = useCallback(
+    (diff) => {
+      unlockAudio();
+      setJustUnlocked(false);
+      setJustBeatUltimate(false);
+      setDifficulty(diff);
+      setBoard(createInitialBoard());
+      setTurn(WHITE);
+      setLastMove(null);
+      setWinner(null);
+      setThinking(false);
+      setMessage(null);
+      setHintsLeft(3);
+      setHintCell(null);
+      leadSaidRef.current = false;
+      behindSaidRef.current = false;
+      setPhase('playing');
+      say(GREETINGS[diff] || 'よろしくね♪');
+    },
+    [say]
+  );
 
   const backToSelect = useCallback(() => {
     setPhase('select');
     setMessage(null);
+    setPapukoLine(null);
   }, []);
+
+  // ヒント：つよいAIの手を1つ光らせる（よわい/ふつう限定・1局3回）
+  const handleHint = useCallback(() => {
+    if (hintsLeft <= 0) return;
+    const mv = chooseMove(board, WHITE, 'hard');
+    if (mv) {
+      setHintCell(mv);
+      setHintsLeft((n) => n - 1);
+    }
+  }, [board, hintsLeft]);
 
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -75,11 +187,23 @@ export default function CpuGame() {
       setWinner(status.winner);
       setThinking(false);
       setPhase('finished');
+      // 難易度別の戦績を記録
+      recordCpuResult(
+        difficulty,
+        status.winner === WHITE ? 'w' : status.winner === PURPLE ? 'l' : 'd'
+      );
+      setRecords(getCpuRecords());
       // 「つよい」に勝ったら究極を解放
       if (status.winner === WHITE && difficulty === 'hard' && !ultimateUnlocked) {
         unlockUltimate();
         setUltimateUnlocked(true);
         setJustUnlocked(true);
+      }
+      // 「究極」に勝ったら称号を獲得
+      if (status.winner === WHITE && difficulty === 'ultimate' && !ultimateBeaten) {
+        markUltimateBeaten();
+        setUltimateBeaten(true);
+        setJustBeatUltimate(true);
       }
       return;
     }
@@ -94,32 +218,58 @@ export default function CpuGame() {
 
     if (turn === PURPLE) {
       setThinking(true);
+      let cancelled = false;
       const t = setTimeout(() => {
-        const mv = chooseMove(board, PURPLE, difficulty);
-        if (mv) {
-          setMessage(null);
-          const flipped = getFlips(board, mv.row, mv.col, PURPLE).length;
-          setBoard((b) => applyMove(b, mv.row, mv.col, PURPLE));
-          setLastMove(mv);
-          playPlace();
-          playFlips(flipped);
-        }
-        setThinking(false);
-        setTurn(WHITE);
+        computeMove(board, PURPLE, difficulty).then((mv) => {
+          if (cancelled) return;
+          if (mv) {
+            setMessage(null);
+            const flipped = getFlips(board, mv.row, mv.col, PURPLE).length;
+            const next = applyMove(board, mv.row, mv.col, PURPLE);
+            setBoard(next);
+            setLastMove(mv);
+            playPlace();
+            playFlips(flipped);
+
+            // 状況に応じたパプ子のセリフ
+            if (isCorner(mv)) {
+              say('角、もーらい♪');
+            } else {
+              const w = countPieces(next, WHITE);
+              const p = countPieces(next, PURPLE);
+              if (w + p >= 20) {
+                if (p - w >= 8 && !leadSaidRef.current) {
+                  leadSaidRef.current = true;
+                  say('ふふ、いい感じかも');
+                } else if (w - p >= 8 && !behindSaidRef.current) {
+                  behindSaidRef.current = true;
+                  say('まだ負けてないから…！');
+                }
+              }
+            }
+          }
+          setThinking(false);
+          setTurn(WHITE);
+        });
       }, 650);
-      return () => clearTimeout(t);
+      return () => {
+        cancelled = true;
+        clearTimeout(t);
+      };
     }
-  }, [board, turn, phase, difficulty, ultimateUnlocked]);
+  }, [board, turn, phase, difficulty, ultimateUnlocked, ultimateBeaten, computeMove, say]);
 
   const handleCellClick = (row, col) => {
     if (phase !== 'playing' || turn !== WHITE || thinking) return;
     if (getLegalMoves(board, WHITE).indexOf(`${row},${col}`) === -1) return;
     setMessage(null);
+    setHintCell(null);
     const flipped = getFlips(board, row, col, WHITE).length;
     setBoard((b) => applyMove(b, row, col, WHITE));
     setLastMove({ row, col });
     playPlace();
     playFlips(flipped);
+    if (isCorner({ row, col })) say('あーっ！角とられた！');
     setTurn(PURPLE);
   };
 
@@ -134,6 +284,7 @@ export default function CpuGame() {
     return (
       <>
         <Head><title>パプ子と対戦 | Purple Reversi</title></Head>
+        <SoundToggle />
         <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
           <div className="w-full max-w-sm flex flex-col items-center">
             <div className="animate-rise">
@@ -149,6 +300,8 @@ export default function CpuGame() {
             <div className="w-full space-y-3">
               {DIFFICULTIES.map((d, i) => {
                 const locked = d.gated && !ultimateUnlocked;
+                const rec = records[d.key];
+                const hasRec = !locked && rec && rec.w + rec.l + (rec.d || 0) > 0;
                 return (
                   <button
                     key={d.key}
@@ -169,14 +322,22 @@ export default function CpuGame() {
                         boxShadow: locked ? 'none' : `0 0 10px ${d.dot}`,
                       }}
                     />
-                    <span className="flex-1">
+                    <span className="flex-1 min-w-0">
                       <span className="block text-[17px] font-bold text-gray-900 leading-tight">
                         {d.label}
+                        {d.key === 'ultimate' && ultimateBeaten && (
+                          <span className="ml-1.5" title="究極を超えた者">👑</span>
+                        )}
                       </span>
                       <span className="block text-xs text-gray-500 mt-0.5">
                         {locked ? '？？？' : d.desc}
                       </span>
                     </span>
+                    {hasRec && (
+                      <span className="text-[11px] text-gray-400 shrink-0 tabular-nums">
+                        {rec.w}勝{rec.l}敗{(rec.d || 0) > 0 ? `${rec.d}分` : ''}
+                      </span>
+                    )}
                     {locked && (
                       <span className="text-lg shrink-0" aria-label="ロック中">
                         🔒
@@ -204,6 +365,7 @@ export default function CpuGame() {
   return (
     <>
       <Head><title>パプ子と対戦 | Purple Reversi</title></Head>
+      <SoundToggle />
       <div className="flex flex-col h-screen [height:100dvh] lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-10">
         {/* 情報パネル（モバイル: 上部 / lg以上: 左サイド） */}
         <div className="flex flex-col shrink-0 lg:w-[22rem]">
@@ -217,6 +379,10 @@ export default function CpuGame() {
             {message ? (
               <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
                 {message}
+              </span>
+            ) : papukoLine ? (
+              <span className="text-sm font-medium text-violet-100 bg-violet-600/60 rounded-full px-4 py-1.5">
+                💬 {papukoLine}
               </span>
             ) : thinking ? (
               <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
@@ -233,6 +399,22 @@ export default function CpuGame() {
             ) : null}
           </div>
 
+          {/* ヒント（よわい/ふつう限定・1局3回・自分の番だけ） */}
+          {(difficulty === 'easy' || difficulty === 'normal') &&
+            phase === 'playing' &&
+            turn === WHITE &&
+            !thinking &&
+            hintsLeft > 0 && (
+              <div className="text-center mt-2">
+                <button
+                  onClick={handleHint}
+                  className="btn btn-glass px-4 py-1.5 text-xs"
+                >
+                  💡 ヒント（あと{hintsLeft}回）
+                </button>
+              </div>
+            )}
+
           <div className="hidden lg:block px-4 mt-8">
             <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
               対局をやめる
@@ -246,6 +428,7 @@ export default function CpuGame() {
           lastMove={lastMove}
           onCellClick={handleCellClick}
           finished={isFinished}
+          hintCell={hintCell}
         />
 
         <div className="lg:hidden px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
@@ -255,7 +438,11 @@ export default function CpuGame() {
         </div>
 
 
-        {isFinished && winner === WHITE && <Confetti />}
+        {isFinished && winner === WHITE && (
+          <Confetti
+            colors={difficulty === 'ultimate' ? ['#fbbf24', '#fff8e1'] : undefined}
+          />
+        )}
 
         {isFinished && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -273,6 +460,12 @@ export default function CpuGame() {
               {justUnlocked && (
                 <div className="mb-5 rounded-xl bg-violet-50 border border-violet-200 px-4 py-2.5 text-sm font-semibold text-violet-700">
                   🔓 隠された難易度「究極」が解放された！
+                </div>
+              )}
+
+              {justBeatUltimate && (
+                <div className="mb-5 rounded-xl bg-amber-50 border border-amber-300 px-4 py-2.5 text-sm font-bold text-amber-700">
+                  👑 称号「究極を超えた者」を獲得！
                 </div>
               )}
 

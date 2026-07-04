@@ -1,23 +1,12 @@
 import { useEffect } from 'react';
 import Head from 'next/head';
 import '../styles/globals.css';
-import io from 'socket.io-client';
 import { playClick, unlockAudio } from '../lib/sound';
 
-let globalSocket = null;
+// ⚠️ ここで socket を張らない：ページ側の lib/socket.js (initSocket) が唯一の接続。
+// 以前は _app でも独自に io() を張っていて1人2接続になり、オンライン人数が水増しされていた。
 
 function MyApp({ Component, pageProps }) {
-  useEffect(() => {
-    if (!globalSocket) {
-      const SOCKET_URL =
-        process.env.NEXT_PUBLIC_SOCKET_URL || 'https://purple-reversi.onrender.com';
-      globalSocket = io(SOCKET_URL, {
-        reconnection: true,
-      });
-      window.__socket = globalSocket;
-    }
-  }, []);
-
   // サイト全体：ボタン押下で「カチっ」というクリック音（盤面のマスは配置音があるので除外）
   useEffect(() => {
     const onDown = (e) => {
@@ -49,6 +38,8 @@ function MyApp({ Component, pageProps }) {
         />
         <link rel="icon" href="https://purplegames-creator.github.io/reversigame/paputaro.png" />
         <link rel="apple-touch-icon" href="https://purplegames-creator.github.io/reversigame/paputaro.png" />
+        {/* PWA（ホーム画面に追加でアプリのように起動） */}
+        <link rel="manifest" href="https://purplegames-creator.github.io/reversigame/manifest.json" />
 
         {/* OGP（SNSシェア） */}
         <meta property="og:type" content="website" />
@@ -78,6 +69,16 @@ function MyApp({ Component, pageProps }) {
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
+
+        {/* 軽量アクセス解析（GoatCounter）。ビルド時に NEXT_PUBLIC_GOATCOUNTER=<サイトコード> を
+            設定した場合だけ有効。未設定なら何も読み込まない */}
+        {process.env.NEXT_PUBLIC_GOATCOUNTER && (
+          <script
+            data-goatcounter={`https://${process.env.NEXT_PUBLIC_GOATCOUNTER}.goatcounter.com/count`}
+            async
+            src="https://gc.zgo.at/count.js"
+          />
+        )}
       </Head>
       <Component {...pageProps} />
     </>

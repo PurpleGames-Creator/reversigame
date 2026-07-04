@@ -3,6 +3,24 @@
 
 let ctx = null;
 
+// ---- ミュート設定（localStorage に永続化） ----
+let muted =
+  typeof window !== 'undefined' && localStorage.getItem('soundMuted') === '1';
+
+export function isMuted() {
+  return muted;
+}
+
+export function toggleMuted() {
+  muted = !muted;
+  try {
+    localStorage.setItem('soundMuted', muted ? '1' : '0');
+  } catch (e) {
+    /* private mode 等では永続化しない */
+  }
+  return muted;
+}
+
 function getCtx() {
   if (typeof window === 'undefined') return null;
   if (!ctx) {
@@ -70,6 +88,7 @@ function noiseTick(when = 0, gain = 0.1) {
 
 // 石を置く音「コトっ」
 export function playPlace() {
+  if (muted) return;
   woodTone(196, { dur: 0.13, gain: 0.3, type: 'triangle', cutoff: 2000 });
   woodTone(98, { dur: 0.1, gain: 0.14, type: 'sine', cutoff: 1200 }); // 低音の芯
   noiseTick(0, 0.09);
@@ -77,6 +96,7 @@ export function playPlace() {
 
 // ボタンを押した時の「カチっ」というUIクリック音
 export function playClick() {
+  if (muted) return;
   const c = getCtx();
   if (!c) return;
   const t0 = c.currentTime;
@@ -114,6 +134,7 @@ export function playClick() {
 
 // ひっくり返る駒の音（枚数ぶん軽くカスケード）
 export function playFlips(count) {
+  if (muted) return;
   if (!count || count < 1) return;
   const n = Math.min(count, 8);
   for (let i = 0; i < n; i++) {

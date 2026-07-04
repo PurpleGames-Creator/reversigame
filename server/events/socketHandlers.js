@@ -41,6 +41,10 @@ function registerSocketHandlers(io) {
         lastMove: null,
         winner: null,
         turnRemaining: null,
+        series: room.series
+          ? { player1: room.series.host, player2: room.series.guest, draw: room.series.draw }
+          : null,
+        spectatorCount: room.spectators ? room.spectators.size : 0,
       };
     }
 
@@ -63,6 +67,11 @@ function registerSocketHandlers(io) {
       player2: { id: room.guest.id, name: room.guest.name, pieces: s.whiteCount },
       lastMove: room.lastMove || null,
       winner,
+      // 再戦をまたぐ通算成績（player1=host / player2=guest 視点）
+      series: room.series
+        ? { player1: room.series.host, player2: room.series.guest, draw: room.series.draw }
+        : null,
+      spectatorCount: room.spectators ? room.spectators.size : 0,
       // 手番の残り時間(ms)。クライアントは受信時刻に足してタイマー表示する
       // （エポックを送らないのは端末の時計ズレに影響されないため）
       turnRemaining:
@@ -75,6 +84,23 @@ function registerSocketHandlers(io) {
   // "row,col" 文字列配列で合法手を返す
   const legalMovesStr = (game) =>
     getLegalMoves(game).map(([r, c]) => `${r},${c}`);
+
+  // 終局した対局を通算成績に加算する（再戦しても持ち越し。二重加算はフラグで防止）
+  const recordResult = (room) => {
+    if (!room || !room.game || !room.series || room.seriesCounted || !room.guest) return;
+    const s = room.game.serialize();
+    if (!s.isFinished) return;
+    let key = 'draw';
+    if (room.resignWinnerId) {
+      key = room.resignWinnerId === room.host.id ? 'host' : 'guest';
+    } else if (s.winner === 'black') {
+      key = 'host';
+    } else if (s.winner === 'white') {
+      key = 'guest';
+    }
+    room.series[key] += 1;
+    room.seriesCounted = true;
+  };
 
   // payload が {roomId} でも文字列でも roomId を取り出す
   const getRoomId = (payload) =>
@@ -109,6 +135,7 @@ function registerSocketHandlers(io) {
 
     if (game.isFinished) {
       room.status = 'finished';
+      recordResult(room);
       io.to(room.roomId).emit('game-finished', buildClientState(room));
     }
   };
@@ -150,6 +177,7 @@ function registerSocketHandlers(io) {
       room.resignWinnerId = (winner && winner.id) || null;
       room.game.clearTurnTimeout();
       roomManager.finishGame(roomId);
+      recordResult(room);
       console.log(`Forfeit by disconnect in ${roomId}: ${loser.name}`);
 
       io.to(roomId).emit('game-finished', buildClientState(room));
@@ -172,6 +200,21 @@ function registerSocketHandlers(io) {
   const emitOnlineCount = () => {
     io.emit('online-count-updated', { onlineCount: connectedIds.size });
   };
+
+  // 観戦者の所在（socket.id -> roomId）。切断時のカウント減算に使う
+  const spectatorRooms = new Map();
+  const removeSpectator = (socketId) => {
+    const roomId = spectatorRooms.get(socketId);
+    if (!roomId) return;
+    spectatorRooms.delete(socketId);
+    const room = roomManager.getRoom(roomId);
+    if (room && room.spectators && room.spectators.delete(socketId)) {
+      io.to(roomId).emit('spectators-updated', { count: room.spectators.size });
+    }
+  };
+
+  // 定型スタンプ（自由入力は受け付けない）
+  const STAMPS = new Set(['yoroshiku', 'nice', 'wow', 'gg']);
 
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -408,6 +451,7 @@ function registerSocketHandlers(io) {
         room.resignWinnerId = winnerId || null;
         if (room.game) room.game.clearTurnTimeout();
         roomManager.finishGame(roomId);
+        recordResult(room);
         console.log(`Player ${socket.id} resigned from ${roomId}`);
 
         io.to(roomId).emit('game-finished', buildClientState(room));
@@ -470,7 +514,11 @@ function registerSocketHandlers(io) {
         const room = roomManager.getRoom(roomId);
         if (!room || !room.game) throw new Error('その対戦は見つかりません');
         socket.join(roomId); // 更新配信を受け取るためルームに参加（playerToRoomには入れない）
+        room.spectators = room.spectators || new Set();
+        room.spectators.add(socket.id);
+        spectatorRooms.set(socket.id, roomId);
         console.log(`Spectator ${socket.id} watching ${roomId}`);
+        io.to(roomId).emit('spectators-updated', { count: room.spectators.size });
         if (callback) callback({ success: true, state: buildClientState(room) });
       } catch (error) {
         console.error('spectate error:', error);
@@ -483,8 +531,33 @@ function registerSocketHandlers(io) {
       try {
         const roomId = getRoomId(payload);
         socket.leave(roomId);
+        removeSpectator(socket.id);
         if (callback) callback({ success: true });
       } catch (error) {
+        if (callback) callback({ success: false, error: error.message });
+      }
+    });
+
+    // ---- send-stamp（定型スタンプ。対局者のみ・1.5秒間隔） ---------------
+    socket.on('send-stamp', (payload, callback) => {
+      try {
+        const roomId = getRoomId(payload);
+        const stamp = payload && payload.stamp;
+        const room = roomManager.getPlayerRoom(socket.id);
+        if (!room || room.roomId !== roomId) throw new Error('Invalid room');
+        if (!STAMPS.has(stamp)) throw new Error('Invalid stamp');
+
+        const now = Date.now();
+        if (socket.lastStampAt && now - socket.lastStampAt < 1500) {
+          if (callback) callback({ success: false, error: 'too fast' });
+          return;
+        }
+        socket.lastStampAt = now;
+
+        io.to(roomId).emit('stamp', { playerId: socket.id, stamp });
+        if (callback) callback({ success: true });
+      } catch (error) {
+        console.error('send-stamp error:', error.message);
         if (callback) callback({ success: false, error: error.message });
       }
     });
@@ -590,6 +663,7 @@ function registerSocketHandlers(io) {
             roomManager.leaveRoom(room.roomId);
           }
         }
+        removeSpectator(socket.id);
         playerNames.delete(socket.id);
         connectedIds.delete(socket.id);
         emitOnlineCount();

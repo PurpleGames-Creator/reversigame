@@ -54,6 +54,9 @@ class RoomManager {
       guest: null,
       game: null,
       status: 'waiting',
+      spectators: new Set(), // 観戦中の socket.id
+      series: { host: 0, guest: 0, draw: 0 }, // 再戦をまたぐ通算成績
+      seriesCounted: false, // 現在の対局を通算に加算済みか
     };
 
     this.rooms.set(roomId, room);
@@ -110,6 +113,7 @@ class RoomManager {
     }
     room.game = new ReversiGame(room.host, room.guest);
     room.status = 'playing';
+    room.seriesCounted = false;
     return room;
   }
 

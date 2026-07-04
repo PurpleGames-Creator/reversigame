@@ -6,7 +6,16 @@ import Board from '../components/Board';
 import PlayerInfo from '../components/PlayerInfo';
 import Timer from '../components/Timer';
 import Confetti from '../components/Confetti';
+import SoundToggle from '../components/SoundToggle';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
+
+// 定型スタンプ（サーバー側のホワイトリストと揃える）
+const STAMP_DEFS = [
+  { id: 'yoroshiku', emoji: '🙂', label: 'よろしく' },
+  { id: 'nice', emoji: '👍', label: 'ナイス' },
+  { id: 'wow', emoji: '😱', label: 'うわー' },
+  { id: 'gg', emoji: '🤝', label: 'GG' },
+];
 
 // 切断した相手の復帰待ちカウントダウン（秒）
 function GraceCountdown({ until }) {
@@ -45,8 +54,11 @@ export default function GamePage() {
   const [graceUntil, setGraceUntil] = useState(null); // 相手の復帰待ち締切
   const [graceName, setGraceName] = useState(null); // 復帰待ちのプレイヤー名
   const [opponentGone, setOpponentGone] = useState(false); // 相手が完全に退出済み
+  const [spectatorCount, setSpectatorCount] = useState(0); // 観戦者数
+  const [bubbles, setBubbles] = useState({}); // スタンプ吹き出し {playerId: {text, key}}
   const prevBoardRef = useRef(null);
   const noticeTimerRef = useRef(null);
+  const bubbleTimersRef = useRef({});
 
   const socket = initSocket();
 
@@ -86,6 +98,7 @@ export default function GamePage() {
       setNotice(null);
       setGraceUntil(null);
       setOpponentGone(false);
+      setSpectatorCount(data.spectatorCount ?? 0);
       syncDeadline(data);
       setLoading(false);
     };
@@ -158,6 +171,7 @@ export default function GamePage() {
           if (res && res.success && res.state && res.state.board) {
             prevBoardRef.current = res.state.board;
             setGameState(res.state);
+            setSpectatorCount(res.state.spectatorCount ?? 0);
             syncDeadline(res.state);
             setError(null);
           } else {
@@ -171,6 +185,7 @@ export default function GamePage() {
           if (res && res.success && res.state && res.state.board) {
             prevBoardRef.current = res.state.board;
             setGameState(res.state);
+            setSpectatorCount(res.state.spectatorCount ?? 0);
             setLegalMoves(res.legalMoves || []);
             syncDeadline(res.state);
             setError(null);
@@ -194,6 +209,26 @@ export default function GamePage() {
           : '相手が時間切れ：自動で打たれました'
       );
     };
+    const handleSpectators = ({ count } = {}) => {
+      setSpectatorCount(typeof count === 'number' ? count : 0);
+    };
+    // スタンプ受信：送り主のパネル上に吹き出しを2.4秒表示
+    const handleStamp = ({ playerId, stamp } = {}) => {
+      const def = STAMP_DEFS.find((d) => d.id === stamp);
+      if (!def || !playerId) return;
+      setBubbles((prev) => ({
+        ...prev,
+        [playerId]: { text: `${def.emoji} ${def.label}`, key: Date.now() },
+      }));
+      if (bubbleTimersRef.current[playerId]) clearTimeout(bubbleTimersRef.current[playerId]);
+      bubbleTimersRef.current[playerId] = setTimeout(() => {
+        setBubbles((prev) => {
+          const next = { ...prev };
+          delete next[playerId];
+          return next;
+        });
+      }, 2400);
+    };
 
     socket.on('game-started', handleGameStarted);
     socket.on('board-updated', handleBoardUpdated);
@@ -205,6 +240,8 @@ export default function GamePage() {
     socket.on('turn-timeout', handleTurnTimeout);
     socket.on('opponent-connection-lost', handleOpponentConnLost);
     socket.on('opponent-reconnected', handleOpponentReconnected);
+    socket.on('spectators-updated', handleSpectators);
+    socket.on('stamp', handleStamp);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect', handleReconnect);
 
@@ -215,6 +252,7 @@ export default function GamePage() {
           if (res && res.success && res.state && res.state.board) {
             prevBoardRef.current = res.state.board;
             setGameState(res.state);
+            setSpectatorCount(res.state.spectatorCount ?? 0);
             syncDeadline(res.state);
             setLoading(false);
           } else {
@@ -227,6 +265,7 @@ export default function GamePage() {
           if (data && data.board) {
             prevBoardRef.current = data.board;
             setGameState(data);
+            setSpectatorCount(data.spectatorCount ?? 0);
             setLegalMoves(data.legalMoves || []);
             syncDeadline(data);
             setLoading(false);
@@ -247,9 +286,12 @@ export default function GamePage() {
       socket.off('turn-timeout', handleTurnTimeout);
       socket.off('opponent-connection-lost', handleOpponentConnLost);
       socket.off('opponent-reconnected', handleOpponentReconnected);
+      socket.off('spectators-updated', handleSpectators);
+      socket.off('stamp', handleStamp);
       socket.off('disconnect', handleDisconnect);
       socket.off('connect', handleReconnect);
       if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+      Object.values(bubbleTimersRef.current).forEach(clearTimeout);
       clearTimeout(bootTimeout);
     };
   }, [roomId, socket, router, isSpectator]);
@@ -283,6 +325,15 @@ export default function GamePage() {
     unlockAudio();
     socket.emit('request-rematch', { roomId });
     setRematch('waiting');
+  };
+
+  // スタンプ送信（サーバー側と同じ1.5秒間隔をクライアントでも守る）
+  const stampCooldownRef = useRef(0);
+  const handleSendStamp = (stampId) => {
+    const now = Date.now();
+    if (now - stampCooldownRef.current < 1500) return;
+    stampCooldownRef.current = now;
+    socket.emit('send-stamp', { roomId, stamp: stampId });
   };
 
   if (loading && !gameState) {
@@ -332,6 +383,7 @@ export default function GamePage() {
   return (
     <>
       <Head><title>{isSpectator ? '観戦中' : '対戦中'} | Purple Reversi</title></Head>
+      <SoundToggle />
       <div className="flex flex-col h-screen [height:100dvh] lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-10">
         {/* 情報パネル（モバイル: 上部 / lg以上: 左サイド） */}
         <div className="flex flex-col shrink-0 lg:w-[22rem]">
@@ -356,6 +408,7 @@ export default function GamePage() {
             player1={gameState.player1}
             player2={gameState.player2}
             currentPlayer={gameState.currentPlayer}
+            bubbles={bubbles}
           />
 
           {isPlaying && isSpectator && (
@@ -373,6 +426,9 @@ export default function GamePage() {
                 </span>
               )}
               <Timer deadline={deadline} />
+              {spectatorCount > 0 && (
+                <p className="text-[11px] text-white/60">👀 {spectatorCount}人が観戦中</p>
+              )}
             </div>
           )}
 
@@ -394,6 +450,27 @@ export default function GamePage() {
                 )}
               </div>
               <Timer deadline={deadline} />
+
+              {/* スタンプ送信（定型のみ） */}
+              <div className="flex justify-center gap-2 mt-2.5 px-4">
+                {STAMP_DEFS.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleSendStamp(s.id)}
+                    className="glass rounded-full px-3 py-1.5 hover:bg-white/15 active:scale-95 transition"
+                    title={s.label}
+                  >
+                    <span className="text-[14px]">{s.emoji}</span>
+                    <span className="text-[11px] text-white/80 ml-1">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {spectatorCount > 0 && (
+                <p className="text-center text-[11px] text-white/60 mt-1.5">
+                  👀 {spectatorCount}人が観戦中
+                </p>
+              )}
             </>
           )}
 
@@ -436,13 +513,25 @@ export default function GamePage() {
               <h2 className="wordmark text-2xl text-gray-900 mb-4">対局終了</h2>
 
               {gameState.winner === 'draw' ? (
-                <p className="text-base font-semibold text-gray-800 mb-5">引き分けです</p>
+                <p className="text-base font-semibold text-gray-800 mb-2">引き分けです</p>
               ) : (
-                <p className="text-base font-semibold text-gray-800 mb-5">
+                <p className="text-base font-semibold text-gray-800 mb-2">
                   {gameState.winner === gameState.player1?.id
                     ? `${gameState.player1?.name}（白）の勝ち`
                     : `${gameState.player2?.name}（紫）の勝ち`}
                 </p>
+              )}
+
+              {/* 同じ相手との通算成績（2局目以降に表示） */}
+              {gameState.series &&
+              gameState.series.player1 + gameState.series.player2 + gameState.series.draw >= 2 ? (
+                <p className="text-xs text-gray-500 mb-4 tabular-nums">
+                  通算 {gameState.player1?.name} {gameState.series.player1} -{' '}
+                  {gameState.series.player2} {gameState.player2?.name}
+                  {gameState.series.draw > 0 ? `（引き分け${gameState.series.draw}）` : ''}
+                </p>
+              ) : (
+                <div className="mb-3" />
               )}
 
               <div className="flex justify-center gap-10 mb-6">

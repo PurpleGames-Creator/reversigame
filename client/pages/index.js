@@ -5,6 +5,7 @@ import { initSocket } from '../lib/socket';
 import { getPlayerName, setPlayerName } from '../lib/storage';
 import Papuko from '../components/Papuko';
 import BoardBackdrop from '../components/BoardBackdrop';
+import SoundToggle from '../components/SoundToggle';
 
 function LockIcon({ size = 18 }) {
   return (
@@ -68,6 +69,13 @@ export default function TitleScreen() {
     const el = e.target;
     setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
   };
+
+  // Render(Free)はスリープするので、トップを開いた時点で /health を叩いて起こしておく。
+  // socket接続も裏で走るが、fetchの方が確実に即リクエストが飛ぶ（プリウォーム）
+  useEffect(() => {
+    const base = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://purple-reversi.onrender.com';
+    fetch(`${base}/health`).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const savedName = getPlayerName();
@@ -195,6 +203,7 @@ export default function TitleScreen() {
   return (
     <>
       <Head><title>Purple Reversi</title></Head>
+      <SoundToggle />
 
       {/* 観戦：進行中の対戦一覧 */}
       {spectateOpen && (

@@ -2,7 +2,7 @@ import { PIECE_WHITE, PIECE_PURPLE } from '../lib/constants';
 
 const PIECE_EMPTY = 0;
 
-export default function Board({ board, legalMoves, lastMove, onCellClick, finished }) {
+export default function Board({ board, legalMoves, lastMove, onCellClick, finished, hintCell }) {
   const handleCellClick = (row, col) => {
     if (onCellClick && !board[row][col] && legalMoves.includes(`${row},${col}`)) {
       onCellClick(row, col);
@@ -94,6 +94,11 @@ export default function Board({ board, legalMoves, lastMove, onCellClick, finish
                         boxShadow: '0 0 8px rgba(255,255,255,0.5)',
                       }}
                     />
+                  )}
+
+                  {/* ヒントマーカー（金色の点滅リング） */}
+                  {empty && hintCell && hintCell.row === row && hintCell.col === col && (
+                    <div className="hint-ring absolute inset-[16%] rounded-full" />
                   )}
 
                   {/* 合法手マーカー（淡い光点） */}
