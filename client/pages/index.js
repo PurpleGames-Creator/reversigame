@@ -440,7 +440,7 @@ export default function TitleScreen() {
                 panel === 'random' ? 'btn-violet' : 'btn-glass'
               }`}
             >
-              ランダム対戦
+              オンライン対戦
             </button>
 
             {/* プライベート戦（タップでトグル） */}

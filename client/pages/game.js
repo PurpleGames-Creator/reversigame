@@ -112,7 +112,7 @@ export default function GamePage() {
           data.player1?.id === socket.id ? 'あなたは白（先手）' : 'あなたは紫（後手）';
         setOpening({ key: Date.now(), text: mine });
         if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
-        openingTimerRef.current = setTimeout(() => setOpening(null), 1650);
+        openingTimerRef.current = setTimeout(() => setOpening(null), 2650);
       }
     };
     const handleBoardUpdated = (data) => {
