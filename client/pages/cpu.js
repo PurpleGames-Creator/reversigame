@@ -18,7 +18,6 @@ import {
 } from '../lib/reversi';
 import SoundToggle from '../components/SoundToggle';
 import CountUp from '../components/CountUp';
-import Replay from '../components/Replay';
 import { chooseMove } from '../lib/ai';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 import {
@@ -63,9 +62,7 @@ export default function CpuGame() {
   const [hintCell, setHintCell] = useState(null);
   const [streaks, setStreaks] = useState({});
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key}
-  const [replayOpen, setReplayOpen] = useState(false);
 
-  const framesRef = useRef([]); // リプレイ用の盤面スナップショット
   const openingTimerRef = useRef(null);
   const aiWorkerRef = useRef(null); // Web Worker（false=生成失敗→同期フォールバック）
   const aiReqRef = useRef(0);
@@ -137,8 +134,6 @@ export default function CpuGame() {
       setDifficulty(diff);
       const initial = createInitialBoard();
       setBoard(initial);
-      framesRef.current = [{ board: initial, lastMove: null }];
-      setReplayOpen(false);
       setTurn(WHITE);
       setLastMove(null);
       setWinner(null);
@@ -220,7 +215,6 @@ export default function CpuGame() {
             const flipped = getFlips(board, mv.row, mv.col, PURPLE).length;
             const next = applyMove(board, mv.row, mv.col, PURPLE);
             setBoard(next);
-            framesRef.current.push({ board: next, lastMove: mv });
             setLastMove(mv);
             playPlace();
             playFlips(flipped);
@@ -244,7 +238,6 @@ export default function CpuGame() {
     const flipped = getFlips(board, row, col, WHITE).length;
     const next = applyMove(board, row, col, WHITE);
     setBoard(next);
-    framesRef.current.push({ board: next, lastMove: { row, col } });
     setLastMove({ row, col });
     playPlace();
     playFlips(flipped);
@@ -456,10 +449,6 @@ export default function CpuGame() {
           </>
         )}
 
-        {/* リプレイ */}
-        {replayOpen && (
-          <Replay frames={framesRef.current} onClose={() => setReplayOpen(false)} />
-        )}
 
         {isFinished && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -468,7 +457,7 @@ export default function CpuGame() {
                 <Papuko size={116} glow />
               </div>
               <h2 className="wordmark text-2xl text-gray-900 mb-5">
-                {winner === 'draw' ? '引き分け' : winner === WHITE ? 'あなたの勝ち' : 'パプ子の勝ち'}
+                {winner === 'draw' ? '引き分け' : winner === WHITE ? '🎉あなたの勝ち🎉' : 'パプ子の勝ち'}
               </h2>
 
               {justUnlocked && (
@@ -513,12 +502,6 @@ export default function CpuGame() {
                   className="btn w-full py-3 bg-gray-900 text-white hover:bg-gray-950"
                 >
                   難易度を変える
-                </button>
-                <button
-                  onClick={() => setReplayOpen(true)}
-                  className="btn w-full py-2 text-gray-500 hover:opacity-70"
-                >
-                  📼 リプレイを見る
                 </button>
                 <button onClick={() => router.push('/')} className="btn w-full py-2 text-violet-600 hover:opacity-70">
                   タイトルへ

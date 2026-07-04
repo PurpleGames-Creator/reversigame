@@ -9,7 +9,6 @@ import Confetti from '../components/Confetti';
 import SoundToggle from '../components/SoundToggle';
 import CountUp from '../components/CountUp';
 import EvalBar from '../components/EvalBar';
-import Replay from '../components/Replay';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 
 // 定型スタンプ（サーバー側のホワイトリストと揃える）
@@ -61,11 +60,9 @@ export default function GamePage() {
   const [bubbles, setBubbles] = useState({}); // スタンプ吹き出し {playerId: {text, key}}
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key, text}
   const [flyStamp, setFlyStamp] = useState(null); // 送信スタンプの飛翔 {id, emoji, key}
-  const [replayOpen, setReplayOpen] = useState(false);
   const prevBoardRef = useRef(null);
   const noticeTimerRef = useRef(null);
   const bubbleTimersRef = useRef({});
-  const framesRef = useRef([]); // リプレイ用の盤面スナップショット
   const openingTimerRef = useRef(null);
 
   const socket = initSocket();
@@ -100,8 +97,6 @@ export default function GamePage() {
 
     const handleGameStarted = (data) => {
       prevBoardRef.current = data.board;
-      framesRef.current = [{ board: data.board, lastMove: null }];
-      setReplayOpen(false);
       setGameState(data);
       setRematch('idle');
       setError(null);
@@ -127,7 +122,6 @@ export default function GamePage() {
       if (changed > 0) {
         playPlace();
         playFlips(changed - 1);
-        framesRef.current.push({ board: data.board, lastMove: data.lastMove || null });
       }
       setGameState((prev) => ({
         ...prev,
@@ -146,7 +140,6 @@ export default function GamePage() {
       if (changed > 0) {
         playPlace();
         playFlips(changed - 1);
-        framesRef.current.push({ board: data.board, lastMove: data.lastMove || null });
       }
       setGameState((prev) => ({
         ...prev,
@@ -555,10 +548,6 @@ export default function GamePage() {
           </>
         )}
 
-        {/* リプレイ */}
-        {replayOpen && (
-          <Replay frames={framesRef.current} onClose={() => setReplayOpen(false)} />
-        )}
 
         {isFinished && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -635,12 +624,6 @@ export default function GamePage() {
                     同じ相手ともう一度
                   </button>
                 )}
-                <button
-                  onClick={() => setReplayOpen(true)}
-                  className="btn w-full py-2 text-gray-500 hover:opacity-70"
-                >
-                  📼 リプレイを見る
-                </button>
                 {!isSpectator && (
                   <button
                     onClick={handleLeaveRoom}
