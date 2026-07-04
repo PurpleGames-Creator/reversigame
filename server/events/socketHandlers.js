@@ -271,6 +271,26 @@ function registerSocketHandlers(io) {
       .map((id) => ({ id, name: playerNames.get(id) || 'Player' }));
   const emitQueue = () => io.emit('queue-updated', { waiting: queueList() });
 
+  // 閉場（24:00）をまたいだ待機の掃除。
+  // 23:59に並んだ人は entry ガードでは残り続けてしまう（永遠にマッチしない幽霊待機）ため、
+  // 定期的に見回して列をクリアし、本人へ通知する。
+  const QUEUE_SWEEP_MS = Number(process.env.QUEUE_SWEEP_MS) || 30000;
+  setInterval(() => {
+    if (isOnlineHours() || matchQueue.length === 0) return;
+    const ids = matchQueue;
+    matchQueue = [];
+    for (const id of ids) {
+      const s = io.sockets.sockets.get(id);
+      if (s) {
+        s.emit('match-closed', {
+          message: '本日のオンライン対戦は終了しました（毎日21:00〜24:00）',
+        });
+      }
+    }
+    console.log(`Queue swept at closing: ${ids.length} waiting player(s) notified`);
+    emitQueue();
+  }, QUEUE_SWEEP_MS);
+
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
     connectedIds.add(socket.id);

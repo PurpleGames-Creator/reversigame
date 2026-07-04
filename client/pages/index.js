@@ -221,6 +221,11 @@ export default function TitleScreen() {
       setChampion(data && data.name ? { name: data.name, wins: data.wins } : null);
     };
     const handleQueue = (data) => setWaitingList(data?.waiting || []);
+    // 閉場で待機列から外された：待機ポップアップを閉じて開催案内（次回カウントダウン付き）を出す
+    const handleMatchClosed = () => {
+      setMatching(false);
+      setHoursOpen(true);
+    };
     // タイトルへ戻ってきた時などに人数・王者・待機列・対戦一覧をまとめて取り直す
     // （online-count-updated は接続/切断時にしか飛ばないため、これが無いと0人表示のままになる）
     const seed = () => {
@@ -258,6 +263,7 @@ export default function TitleScreen() {
     socket.on('matched', handleMatched);
     socket.on('night-champion', handleChampion);
     socket.on('queue-updated', handleQueue);
+    socket.on('match-closed', handleMatchClosed);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -267,6 +273,7 @@ export default function TitleScreen() {
       socket.off('matched', handleMatched);
       socket.off('night-champion', handleChampion);
       socket.off('queue-updated', handleQueue);
+      socket.off('match-closed', handleMatchClosed);
       matchTimersRef.current.forEach(clearTimeout);
     };
   }, [socket, router]);
@@ -713,7 +720,7 @@ export default function TitleScreen() {
                 disabled={!playerName.trim() || loading}
                 className="btn btn-violet w-full py-3.5 text-base"
               >
-                {loading ? '接続中…' : '対局開始'}
+                {loading ? '接続中…' : 'ランダムに相手を探す'}
               </button>
               {loading && !connected && (
                 <p className="text-xs text-white/60 text-center leading-relaxed">
