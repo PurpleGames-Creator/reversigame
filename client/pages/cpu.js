@@ -307,6 +307,19 @@ export default function CpuGame() {
       <>
         <Head><title>パプ子と対戦 | Purple Reversi</title></Head>
         <SoundToggle />
+        {/* 左上の戻るボタン（SoundToggleと対になる配置） */}
+        <button
+          onClick={() => router.push('/')}
+          aria-label="タイトルへもどる"
+          title="タイトルへもどる"
+          className="fixed z-40 w-10 h-10 rounded-full glass flex items-center justify-center text-white text-lg transition-opacity hover:opacity-80"
+          style={{
+            top: 'max(0.9rem, env(safe-area-inset-top))',
+            left: 'max(0.9rem, env(safe-area-inset-left))',
+          }}
+        >
+          ←
+        </button>
         <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
           <div className="w-full max-w-sm flex flex-col items-center">
             <div className="animate-rise">
@@ -377,12 +390,6 @@ export default function CpuGame() {
               })}
             </div>
 
-            <button
-              onClick={() => router.push('/')}
-              className="btn btn-ghost mt-8 text-sm animate-rise delay-4"
-            >
-              タイトルへもどる
-            </button>
           </div>
         </main>
       </>
