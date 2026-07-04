@@ -127,6 +127,20 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// 空いている角の隣（C打ち/X打ちの3マス）か？
+// 角がまだ空の間だけ危険。角が埋まったら周囲3マスは普通の手として扱う。
+function isNextToEmptyCorner(board, moveStr) {
+  const { row, col } = parseMove(moveStr);
+  for (const r of [0, 7]) {
+    for (const c of [0, 7]) {
+      if (board[r][c] !== EMPTY) continue; // 角が埋まっていれば危険ではない
+      if (row === r && col === c) continue; // 角そのものはOK
+      if (Math.abs(row - r) <= 1 && Math.abs(col - c) <= 1) return true;
+    }
+  }
+  return false;
+}
+
 // 1手先の位置評価で最善手を選ぶ（軽量）
 function greedyBest(board, color, moves) {
   let best = null;
@@ -199,8 +213,12 @@ export function chooseMove(board, color, difficulty = 'normal') {
 
   // ふつう: 数手先を読む（終盤は読み切り）
   if (difficulty === 'normal') {
-    const depth = empties <= 10 ? empties : 2;
-    return searchBest(board, color, moves, depth);
+    if (empties <= 10) {
+      return searchBest(board, color, moves, empties);
+    }
+    // 空いている角の隣には「なるべく」置かない（他に合法手が無い時だけ許可）
+    const safeMoves = moves.filter((m) => !isNextToEmptyCorner(board, m));
+    return searchBest(board, color, safeMoves.length > 0 ? safeMoves : moves, 2);
   }
 
   // 究極: 時間の許す限り深く（終盤は14マスから読み切り）
