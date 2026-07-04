@@ -92,6 +92,8 @@ export default function TitleScreen() {
   const [privateCode, setPrivateCode] = useState('');
   const [matching, setMatching] = useState(false);
   const [matchMode, setMatchMode] = useState('random'); // random | private
+  const [matchPhase, setMatchPhase] = useState('searching'); // searching | found | preparing
+  const matchTimersRef = useRef([]);
   const [spectateOpen, setSpectateOpen] = useState(false);
   const [liveGames, setLiveGames] = useState([]);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -120,8 +122,15 @@ export default function TitleScreen() {
     const handleCount = (data) =>
       setOnlineCount(typeof data === 'number' ? data : data?.onlineCount ?? 0);
     const handleRooms = (data) => setLiveGames(data?.playing || []);
+    // マッチ成立：即遷移せず「相手が見つかりました→マッチング中」と進捗を見せてから対局へ
     const handleMatched = ({ roomId } = {}) => {
-      if (roomId) router.push(`/game?roomId=${roomId}`);
+      if (!roomId) return;
+      setMatchPhase('found');
+      matchTimersRef.current.forEach(clearTimeout);
+      matchTimersRef.current = [
+        setTimeout(() => setMatchPhase('preparing'), 900),
+        setTimeout(() => router.push(`/game?roomId=${roomId}`), 1700),
+      ];
     };
 
     socket.on('connect', handleConnect);
@@ -136,6 +145,7 @@ export default function TitleScreen() {
       socket.off('online-count-updated', handleCount);
       socket.off('rooms-updated', handleRooms);
       socket.off('matched', handleMatched);
+      matchTimersRef.current.forEach(clearTimeout);
     };
   }, [socket, router]);
 
@@ -193,6 +203,7 @@ export default function TitleScreen() {
         setPlayerName(playerName.trim());
         setLoading(false);
         setMatchMode('random');
+        setMatchPhase('searching');
         setMatching(true);
         socket.emit('find-match');
       } else {
@@ -211,6 +222,7 @@ export default function TitleScreen() {
         setPlayerName(playerName.trim());
         setLoading(false);
         setMatchMode('private');
+        setMatchPhase('searching');
         setMatching(true);
         socket.emit('private-match', { code });
       } else {
@@ -220,6 +232,7 @@ export default function TitleScreen() {
   };
 
   const handleCancelMatch = () => {
+    if (matchPhase !== 'searching') return; // マッチ成立後はキャンセル不可
     if (matchMode === 'private') socket.emit('cancel-private', { code: privateCode.trim() });
     else socket.emit('cancel-match');
     setMatching(false);
@@ -238,15 +251,23 @@ export default function TitleScreen() {
       <Head><title>Purple Reversi</title></Head>
       <SoundToggle />
 
-      {/* 観戦：進行中の対戦一覧 */}
+      {/* 観戦：進行中の対戦一覧。カードは固定高＝一覧が増減しても「閉じる」の位置が動かない */}
       {spectateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#2a0f4c]/75 backdrop-blur-sm">
-          <div className="glass-light rounded-3xl p-6 max-w-sm w-full animate-rise">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#2a0f4c]/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSpectateOpen(false); // 背景タップでも閉じる
+          }}
+        >
+          <div
+            className="glass-light rounded-3xl p-6 max-w-sm w-full animate-rise flex flex-col"
+            style={{ height: 'min(26rem, 78vh)' }}
+          >
             <h2 className="wordmark text-xl text-gray-900 mb-1 text-center">観戦する</h2>
-            {liveGames.length > 0 && (
-              <p className="text-sm text-gray-500 mb-4 text-center">見たい対戦を選んでください</p>
-            )}
-            <div className="space-y-2.5 max-h-[50vh] overflow-y-auto">
+            <p className="text-sm text-gray-500 mb-4 text-center h-5">
+              {liveGames.length > 0 ? '見たい対戦を選んでください' : ''}
+            </p>
+            <div className="space-y-2.5 flex-1 overflow-y-auto">
               {liveGames.length > 0 ? (
                 liveGames.map((g) => {
                   const stage =
@@ -288,9 +309,11 @@ export default function TitleScreen() {
                   );
                 })
               ) : (
-                <p className="text-center text-sm text-gray-500 py-8">
-                  いま対戦中の試合はありません
-                </p>
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-center text-sm text-gray-500">
+                    いま対戦中の試合はありません
+                  </p>
+                </div>
               )}
             </div>
             <button
@@ -310,18 +333,38 @@ export default function TitleScreen() {
             <div className="flex justify-center mb-3">
               <Papuko size={96} float glow />
             </div>
-            <p className="text-lg font-bold text-gray-900 mb-1 search-breathing">対戦相手検索中</p>
-            {matchMode === 'private' ? (
+            {/* 進捗フェーズ：検索中 → 相手が見つかりました → マッチング中 */}
+            <p
+              key={matchPhase}
+              className={`text-lg font-bold mb-1 animate-rise ${
+                matchPhase === 'searching'
+                  ? 'text-gray-900 search-breathing'
+                  : matchPhase === 'found'
+                    ? 'text-emerald-600'
+                    : 'text-violet-700'
+              }`}
+            >
+              {matchPhase === 'searching'
+                ? '対戦相手検索中'
+                : matchPhase === 'found'
+                  ? '✓ 相手が見つかりました！'
+                  : 'マッチング中…'}
+            </p>
+            {matchMode === 'private' && matchPhase === 'searching' ? (
               <p className="text-sm text-gray-500 mb-1">
                 あいことば：<span className="font-bold text-violet-700">{privateCode.trim()}</span>
               </p>
             ) : null}
             <p className="text-sm text-gray-500 mb-5">
-              {connected
-                ? matchMode === 'private'
-                  ? '同じあいことばの友達を待っています'
-                  : 'マッチングするまでお待ちください'
-                : 'サーバーを起動中…最大50秒ほどかかります'}
+              {matchPhase === 'found'
+                ? '対戦相手とつなぎます'
+                : matchPhase === 'preparing'
+                  ? '対局の準備をしています'
+                  : connected
+                    ? matchMode === 'private'
+                      ? '同じあいことばの友達を待っています'
+                      : 'マッチングするまでお待ちください'
+                    : 'サーバーを起動中…最大50秒ほどかかります'}
             </p>
             <div className="flex justify-center gap-2 mb-6">
               <span className="w-2.5 h-2.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -330,7 +373,8 @@ export default function TitleScreen() {
             </div>
             <button
               onClick={handleCancelMatch}
-              className="btn w-full py-3 bg-white text-gray-700 font-semibold border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-400"
+              disabled={matchPhase !== 'searching'}
+              className="btn w-full py-3 bg-white text-gray-700 font-semibold border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40"
             >
               待機をやめる
             </button>

@@ -495,18 +495,8 @@ function registerSocketHandlers(io) {
     // ---- get-live-games（観戦できる進行中の対戦一覧） --------------------
     socket.on('get-live-games', (callback) => {
       try {
-        const games = roomManager.getPlayingRooms().map((room) => {
-          const s = room.game ? room.game.serialize() : null;
-          return {
-            roomId: room.roomId,
-            player1: room.host.name,
-            player2: room.guest ? room.guest.name : '—',
-            pieces1: s ? s.blackCount : 2,
-            pieces2: s ? s.whiteCount : 2,
-            moves: s ? Math.max(0, s.blackCount + s.whiteCount - 4) : 0,
-          };
-        });
-        if (callback) callback({ games });
+        if (callback)
+          callback({ games: buildRoomsPayload(roomManager, playerNames, connectedIds.size).playing });
       } catch (error) {
         console.error('get-live-games error:', error);
         if (callback) callback({ games: [], error: error.message });
@@ -687,11 +677,19 @@ function buildRoomsPayload(roomManager, playerNames, onlineCount) {
     roomId: room.roomId,
     hostName: room.host.name,
   }));
-  const playing = roomManager.getPlayingRooms().map((room) => ({
-    roomId: room.roomId,
-    player1: room.host.name,
-    player2: room.guest ? room.guest.name : 'Waiting...',
-  }));
+  // 観戦一覧用に石数・手数も同梱（get-live-games と rooms-updated で同じ形にし、
+  // ポップアップ表示中の rooms-updated で行の形が変わってガタつくのを防ぐ）
+  const playing = roomManager.getPlayingRooms().map((room) => {
+    const s = room.game ? room.game.serialize() : null;
+    return {
+      roomId: room.roomId,
+      player1: room.host.name,
+      player2: room.guest ? room.guest.name : '—',
+      pieces1: s ? s.blackCount : 2,
+      pieces2: s ? s.whiteCount : 2,
+      moves: s ? Math.max(0, s.blackCount + s.whiteCount - 4) : 0,
+    };
+  });
   return { waiting, playing, onlineCount };
 }
 
