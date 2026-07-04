@@ -18,14 +18,17 @@ import {
 } from '../lib/reversi';
 import { chooseMove } from '../lib/ai';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
+import { isUltimateUnlocked, unlockUltimate } from '../lib/storage';
 
 const YOU = { id: 'you', name: 'あなた' };
 const CPU = { id: 'papuko', name: 'パプ子' };
 
 const DIFFICULTIES = [
-  { key: 'easy', label: 'よわい', desc: '位置を考えて打つ。腕試しの入門に', dot: '#34d399' },
-  { key: 'normal', label: 'ふつう', desc: '数手先を読んでくる', dot: '#a78bfa' },
-  { key: 'hard', label: 'つよい', desc: 'さらに深く読む本気のパプ子', dot: '#fbbf24' },
+  { key: 'easy', label: 'よわい', desc: 'ゆる～くいくよ', dot: '#34d399' },
+  { key: 'normal', label: 'ふつう', desc: '油断しないでね', dot: '#a78bfa' },
+  { key: 'hard', label: 'つよい', desc: '強いよ、私', dot: '#fbbf24' },
+  // 究極は「つよい」に勝つまでロック（解放状態は localStorage）
+  { key: 'ultimate', label: '究極', desc: 'もう、誰もついてこれない', dot: '#f43f5e', gated: true },
 ];
 
 // 人間 = 白(先手), パプ子 = 紫(後手)
@@ -39,9 +42,16 @@ export default function CpuGame() {
   const [winner, setWinner] = useState(null);
   const [thinking, setThinking] = useState(false);
   const [message, setMessage] = useState(null);
+  const [ultimateUnlocked, setUltimateUnlocked] = useState(false);
+  const [justUnlocked, setJustUnlocked] = useState(false);
+
+  useEffect(() => {
+    setUltimateUnlocked(isUltimateUnlocked());
+  }, []);
 
   const startGame = useCallback((diff) => {
     unlockAudio();
+    setJustUnlocked(false);
     setDifficulty(diff);
     setBoard(createInitialBoard());
     setTurn(WHITE);
@@ -65,6 +75,12 @@ export default function CpuGame() {
       setWinner(status.winner);
       setThinking(false);
       setPhase('finished');
+      // 「つよい」に勝ったら究極を解放
+      if (status.winner === WHITE && difficulty === 'hard' && !ultimateUnlocked) {
+        unlockUltimate();
+        setUltimateUnlocked(true);
+        setJustUnlocked(true);
+      }
       return;
     }
 
@@ -93,7 +109,7 @@ export default function CpuGame() {
       }, 650);
       return () => clearTimeout(t);
     }
-  }, [board, turn, phase, difficulty]);
+  }, [board, turn, phase, difficulty, ultimateUnlocked]);
 
   const handleCellClick = (row, col) => {
     if (phase !== 'playing' || turn !== WHITE || thinking) return;
@@ -131,24 +147,44 @@ export default function CpuGame() {
             </p>
 
             <div className="w-full space-y-3">
-              {DIFFICULTIES.map((d, i) => (
-                <button
-                  key={d.key}
-                  onClick={() => startGame(d.key)}
-                  className={`glass-light w-full rounded-2xl px-5 py-4 text-left flex items-center gap-3.5 transition-transform duration-200 hover:-translate-y-0.5 active:scale-[0.98] animate-rise delay-${i + 2}`}
-                >
-                  <span
-                    className="inline-block rounded-full shrink-0"
-                    style={{ width: 12, height: 12, background: d.dot, boxShadow: `0 0 10px ${d.dot}` }}
-                  />
-                  <span>
-                    <span className="block text-[17px] font-bold text-gray-900 leading-tight">
-                      {d.label}
+              {DIFFICULTIES.map((d, i) => {
+                const locked = d.gated && !ultimateUnlocked;
+                return (
+                  <button
+                    key={d.key}
+                    onClick={() => !locked && startGame(d.key)}
+                    disabled={locked}
+                    className={`glass-light w-full rounded-2xl px-5 py-4 text-left flex items-center gap-3.5 animate-rise delay-${Math.min(i + 2, 4)} ${
+                      locked
+                        ? 'opacity-50 grayscale cursor-not-allowed'
+                        : 'transition-transform duration-200 hover:-translate-y-0.5 active:scale-[0.98]'
+                    }`}
+                  >
+                    <span
+                      className="inline-block rounded-full shrink-0"
+                      style={{
+                        width: 12,
+                        height: 12,
+                        background: locked ? '#9ca3af' : d.dot,
+                        boxShadow: locked ? 'none' : `0 0 10px ${d.dot}`,
+                      }}
+                    />
+                    <span className="flex-1">
+                      <span className="block text-[17px] font-bold text-gray-900 leading-tight">
+                        {d.label}
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        {locked ? '？？？' : d.desc}
+                      </span>
                     </span>
-                    <span className="block text-xs text-gray-500 mt-0.5">{d.desc}</span>
-                  </span>
-                </button>
-              ))}
+                    {locked && (
+                      <span className="text-lg shrink-0" aria-label="ロック中">
+                        🔒
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <button
@@ -184,7 +220,7 @@ export default function CpuGame() {
               </span>
             ) : thinking ? (
               <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
-                パプ子が考え中…
+                {difficulty === 'ultimate' ? 'パプ子が本気で考え中…' : 'パプ子が考え中…'}
               </span>
             ) : !isFinished ? (
               <span
@@ -232,6 +268,12 @@ export default function CpuGame() {
               </h2>
               {winner === 'draw' && (
                 <p className="text-gray-500 text-sm mb-5">いい勝負でした</p>
+              )}
+
+              {justUnlocked && (
+                <div className="mb-5 rounded-xl bg-violet-50 border border-violet-200 px-4 py-2.5 text-sm font-semibold text-violet-700">
+                  🔓 隠された難易度「究極」が解放された！
+                </div>
               )}
 
               <div className="flex justify-center gap-10 mb-6">
