@@ -12,7 +12,7 @@ import { playPlace, playFlips, unlockAudio } from '../lib/sound';
 // 定型スタンプ（サーバー側のホワイトリストと揃える）
 const STAMP_DEFS = [
   { id: 'yoroshiku', emoji: '🙂', label: 'よろしく' },
-  { id: 'nice', emoji: '👍', label: 'ナイス' },
+  { id: 'umm', emoji: '🤔', label: 'うーん' },
   { id: 'wow', emoji: '😱', label: 'うわー' },
   { id: 'gg', emoji: '🤝', label: 'GG' },
 ];

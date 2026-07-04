@@ -214,7 +214,7 @@ function registerSocketHandlers(io) {
   };
 
   // 定型スタンプ（自由入力は受け付けない）
-  const STAMPS = new Set(['yoroshiku', 'nice', 'wow', 'gg']);
+  const STAMPS = new Set(['yoroshiku', 'umm', 'wow', 'gg']);
 
   io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
