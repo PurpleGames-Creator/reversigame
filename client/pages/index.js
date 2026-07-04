@@ -27,6 +27,31 @@ const msUntilOpen = () => {
   return jstDayStart + 21 * 3600e3 - jstNowMs;
 };
 
+// 閉場15分前からのカウントダウン（開催中のみ・23:45から表示）
+function ClosingNotice() {
+  const [left, setLeft] = useState(null);
+  useEffect(() => {
+    const tick = () => {
+      const jstMs = Date.now() + 9 * 3600e3;
+      const h = Math.floor(jstMs / 3600e3) % 24;
+      const untilMidnight = 86400e3 - (jstMs % 86400e3);
+      setLeft(h >= 21 && untilMidnight <= 15 * 60e3 ? untilMidnight : null);
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (left == null) return null;
+  const s = Math.max(0, Math.floor(left / 1000));
+  const m = Math.floor(s / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  return (
+    <p className="text-[12px] font-bold text-amber-300 animate-pulse">
+      ⏰ 閉場まで あと {m}:{sec}
+    </p>
+  );
+}
+
 // 開催までのカウントダウン（1秒ごと更新・H:MM:SS）
 function OpenCountdown() {
   const [left, setLeft] = useState(msUntilOpen());
@@ -127,10 +152,18 @@ export default function TitleScreen() {
   const [liveGames, setLiveGames] = useState([]);
   const [onlineOpen, setOnlineOpen] = useState(true); // 開催時間内か（初期はSSR差異回避でtrue）
   const [hoursOpen, setHoursOpen] = useState(false); // 開催時間の案内ポップアップ
+  const [champion, setChampion] = useState(null); // 夜間王者 {name, wins}
 
   // 開催時間の判定を30秒ごとに更新（21:00をまたいだら自動でロック解除）
+  // 21:00に開いたら前夜の王者表示をクリア（新しい夜の集計が始まる）
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    const update = () => setOnlineOpen(isOnlineHours());
+    const update = () => {
+      const open = isOnlineHours();
+      if (open && !prevOpenRef.current) setChampion(null);
+      prevOpenRef.current = open;
+      setOnlineOpen(open);
+    };
     update();
     const t = setInterval(update, 30000);
     return () => clearInterval(t);
@@ -161,6 +194,9 @@ export default function TitleScreen() {
     const handleCount = (data) =>
       setOnlineCount(typeof data === 'number' ? data : data?.onlineCount ?? 0);
     const handleRooms = (data) => setLiveGames(data?.playing || []);
+    const handleChampion = (data) => {
+      setChampion(data && data.name ? { name: data.name, wins: data.wins } : null);
+    };
     // マッチ成立：即遷移せず「相手が見つかりました→マッチング中」と進捗を見せてから対局へ
     const handleMatched = ({ roomId } = {}) => {
       if (!roomId) return;
@@ -177,6 +213,7 @@ export default function TitleScreen() {
     socket.on('online-count-updated', handleCount);
     socket.on('rooms-updated', handleRooms);
     socket.on('matched', handleMatched);
+    socket.on('night-champion', handleChampion);
 
     return () => {
       socket.off('connect', handleConnect);
@@ -184,6 +221,7 @@ export default function TitleScreen() {
       socket.off('online-count-updated', handleCount);
       socket.off('rooms-updated', handleRooms);
       socket.off('matched', handleMatched);
+      socket.off('night-champion', handleChampion);
       matchTimersRef.current.forEach(clearTimeout);
     };
   }, [socket, router]);
@@ -498,9 +536,19 @@ export default function TitleScreen() {
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
             <span className="tabular-nums">{shownOnline}</span>人がオンライン
           </p>
-          <p className="mt-1 mb-7 text-[11px] text-white/45 animate-rise delay-2">
+          <p className="mt-1 text-[11px] text-white/45 animate-rise delay-2">
             （あなたを除く）
           </p>
+
+          {/* 夜間王者（開催中=今夜の暫定王者 / 閉場後=昨晩の王者を翌20:59まで掲示） */}
+          <div className="mt-1.5 mb-7 flex flex-col items-center gap-1 animate-rise delay-2">
+            {champion && (
+              <p className="text-[12px] font-semibold text-amber-300/95">
+                👑 {onlineOpen ? '今夜の王者（暫定）' : '昨晩の王者'}: {champion.name}（{champion.wins}勝）
+              </p>
+            )}
+            <ClosingNotice />
+          </div>
 
           {/* アクション：2×2 グリッド */}
           <div className="w-full grid grid-cols-2 gap-3">

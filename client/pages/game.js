@@ -7,9 +7,11 @@ import PlayerInfo from '../components/PlayerInfo';
 import Timer from '../components/Timer';
 import Confetti from '../components/Confetti';
 import SoundToggle from '../components/SoundToggle';
+import ThemeToggle from '../components/ThemeToggle';
 import CountUp from '../components/CountUp';
 import EvalBar from '../components/EvalBar';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
+import { getBoardTheme } from '../lib/storage';
 
 // 定型スタンプ（サーバー側のホワイトリストと揃える）
 const STAMP_DEFS = [
@@ -60,6 +62,7 @@ export default function GamePage() {
   const [bubbles, setBubbles] = useState({}); // スタンプ吹き出し {playerId: {text, key}}
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key, text}
   const [flyStamp, setFlyStamp] = useState(null); // 送信スタンプの飛翔 {id, emoji, key}
+  const [boardTheme, setBoardThemeState] = useState('purple');
   const prevBoardRef = useRef(null);
   const noticeTimerRef = useRef(null);
   const bubbleTimersRef = useRef({});
@@ -73,6 +76,10 @@ export default function GamePage() {
     const unlock = () => unlockAudio();
     window.addEventListener('pointerdown', unlock, { once: true });
     return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
+
+  useEffect(() => {
+    setBoardThemeState(getBoardTheme());
   }, []);
 
   useEffect(() => {
@@ -345,8 +352,31 @@ export default function GamePage() {
 
   const handleRematch = () => {
     unlockAudio();
-    socket.emit('request-rematch', { roomId });
     setRematch('waiting');
+    socket.emit('request-rematch', { roomId }, (res) => {
+      // 閉場後のオンライン対戦はサーバーが再戦を拒否する
+      if (res && res.success === false) {
+        setRematch('idle');
+        setError(res.error || '再戦できません');
+      }
+    });
+  };
+
+  // 観戦ザッピング：いま進行中の別の試合へワンタップ移動
+  const handleNextSpectate = () => {
+    socket.emit('get-live-games', (res) => {
+      const games = (res && res.games) || [];
+      const next = games.find((g) => g.roomId !== roomId);
+      if (next) {
+        socket.emit('leave-spectate', { roomId });
+        setGameState(null);
+        setError(null);
+        setLoading(true);
+        router.push(`/game?roomId=${next.roomId}&spectate=1`);
+      } else {
+        setError('いま観戦できる他の試合はありません');
+      }
+    });
   };
 
   // スタンプ送信（サーバー側と同じ1.5秒間隔をクライアントでも守る）
@@ -409,6 +439,7 @@ export default function GamePage() {
     <>
       <Head><title>{isSpectator ? '観戦中' : '対戦中'} | Purple Reversi</title></Head>
       <SoundToggle />
+      <ThemeToggle theme={boardTheme} onChange={setBoardThemeState} />
       <div className="flex flex-col h-screen [height:100dvh] lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-10">
         {/* 情報パネル（モバイル: 上部 / lg以上: 左サイド） */}
         <div className="flex flex-col shrink-0 lg:w-[22rem]">
@@ -515,6 +546,7 @@ export default function GamePage() {
           lastMove={gameState.lastMove}
           onCellClick={handleCellClick}
           finished={isFinished}
+          theme={boardTheme}
         />
 
         <div className="lg:hidden px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
@@ -620,9 +652,14 @@ export default function GamePage() {
 
               <div className="space-y-2.5">
                 {isSpectator ? (
-                  <button onClick={handleExitSpectate} className="btn btn-violet w-full py-3.5">
-                    観戦を終える
-                  </button>
+                  <>
+                    <button onClick={handleNextSpectate} className="btn btn-violet w-full py-3.5">
+                      ▶ 次の試合を観る
+                    </button>
+                    <button onClick={handleExitSpectate} className="btn w-full py-3 bg-gray-100 text-gray-800 hover:bg-gray-200">
+                      観戦を終える
+                    </button>
+                  </>
                 ) : opponentGone ? (
                   <p className="text-sm text-gray-500 py-2">相手は退出しました</p>
                 ) : rematch === 'waiting' ? (

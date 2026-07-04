@@ -94,6 +94,34 @@ function registerSocketHandlers(io) {
   const legalMovesStr = (game) =>
     getLegalMoves(game).map(([r, c]) => `${r},${c}`);
 
+  // ---- 夜間イベント（オンライン対戦 21:00〜24:00）の王者集計 ----
+  // その夜の最多勝利者。翌日20:59まで「昨晩の王者」として掲示され、21:00に自動リセット。
+  // メモリ管理（DB不要）: Render再起動で消えるが毎晩リセットの仕様なので許容。
+  let night = { key: null, wins: {}, games: 0 };
+  const nightKeyNow = () => {
+    const jstMs = Date.now() + 9 * 3600e3;
+    const h = Math.floor(jstMs / 3600e3) % 24;
+    // 21時前はまだ「昨晩」の集計期間に属する
+    const dayMs = h >= 21 ? jstMs : jstMs - 86400e3;
+    return new Date(dayMs).toISOString().slice(0, 10);
+  };
+  const ensureNight = () => {
+    const k = nightKeyNow();
+    if (night.key !== k) night = { key: k, wins: {}, games: 0 };
+  };
+  const championPayload = () => {
+    ensureNight();
+    let name = null;
+    let wins = 0;
+    for (const [n, w] of Object.entries(night.wins)) {
+      if (w > wins) {
+        name = n;
+        wins = w;
+      }
+    }
+    return { name, wins, games: night.games };
+  };
+
   // 終局した対局を通算成績に加算する（再戦しても持ち越し。二重加算はフラグで防止）
   const recordResult = (room) => {
     if (!room || !room.game || !room.series || room.seriesCounted || !room.guest) return;
@@ -109,6 +137,17 @@ function registerSocketHandlers(io) {
     }
     room.series[key] += 1;
     room.seriesCounted = true;
+
+    // 夜間王者の集計はオンライン対戦(random)のみ対象（プライベート戦は友達遊びなので除外）
+    if (room.mode === 'random') {
+      ensureNight();
+      night.games += 1;
+      if (key !== 'draw' && room[key]) {
+        const name = room[key].name;
+        night.wins[name] = (night.wins[name] || 0) + 1;
+      }
+      io.emit('night-champion', championPayload());
+    }
   };
 
   // payload が {roomId} でも文字列でも roomId を取り出す
@@ -229,6 +268,7 @@ function registerSocketHandlers(io) {
     console.log(`User connected: ${socket.id}`);
     connectedIds.add(socket.id);
     emitOnlineCount();
+    socket.emit('night-champion', championPayload());
 
     // ---- register --------------------------------------------------------
     socket.on('register', (playerName, callback) => {
@@ -304,6 +344,7 @@ function registerSocketHandlers(io) {
           const room = roomManager.joinRoom(roomId, guestP.id, guestP.name, tokenOf(guestP.sock));
           if (guestP.sock) guestP.sock.join(roomId);
           room.lastMove = null;
+          room.mode = 'random'; // 時間限定イベント対象（再戦ガード・王者集計に使う）
           console.log(`Matched: ${hostP.name}(白) vs ${guestP.name} (${roomId})`);
 
           io.to(roomId).emit('matched', { roomId });
@@ -355,6 +396,7 @@ function registerSocketHandlers(io) {
           const room = roomManager.joinRoom(roomId, guestP.id, guestP.name, tokenOf(guestP.sock));
           if (guestP.sock) guestP.sock.join(roomId);
           room.lastMove = null;
+          room.mode = 'private'; // 常時可（時間ガード・王者集計の対象外）
           console.log(`Private matched (${code}): ${hostP.name}(白) vs ${guestP.name} (${roomId})`);
 
           io.to(roomId).emit('matched', { roomId });
@@ -486,6 +528,10 @@ function registerSocketHandlers(io) {
         const room = roomManager.getPlayerRoom(socket.id);
         if (!room || room.roomId !== roomId) throw new Error('Invalid room');
         if (!room.guest) throw new Error('相手がいません');
+        // オンライン対戦は閉場後の再戦不可（進行中の対局はそのまま最後まで打てる）
+        if (room.mode === 'random' && !isOnlineHours()) {
+          throw new Error('本日のオンライン対戦は終了しました（毎日21:00〜24:00）');
+        }
 
         room.rematchVotes = room.rematchVotes || new Set();
         room.rematchVotes.add(socket.id);

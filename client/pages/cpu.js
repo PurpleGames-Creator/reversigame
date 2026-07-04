@@ -17,6 +17,7 @@ import {
   PURPLE,
 } from '../lib/reversi';
 import SoundToggle from '../components/SoundToggle';
+import ThemeToggle from '../components/ThemeToggle';
 import CountUp from '../components/CountUp';
 import { chooseMove } from '../lib/ai';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
@@ -29,6 +30,7 @@ import {
   recordCpuResult,
   getCpuStreaks,
   bumpCpuStreak,
+  getBoardTheme,
 } from '../lib/storage';
 
 const YOU = { id: 'you', name: 'あなた' };
@@ -62,6 +64,7 @@ export default function CpuGame() {
   const [hintCell, setHintCell] = useState(null);
   const [streaks, setStreaks] = useState({});
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key}
+  const [boardTheme, setBoardThemeState] = useState('purple');
 
   const openingTimerRef = useRef(null);
   const aiWorkerRef = useRef(null); // Web Worker（false=生成失敗→同期フォールバック）
@@ -72,6 +75,7 @@ export default function CpuGame() {
     setUltimateBeaten(isUltimateBeaten());
     setRecords(getCpuRecords());
     setStreaks(getCpuStreaks());
+    setBoardThemeState(getBoardTheme());
   }, []);
 
   // アンマウント時にAIワーカーを破棄
@@ -351,6 +355,7 @@ export default function CpuGame() {
     <>
       <Head><title>パプ子と対戦 | Purple Reversi</title></Head>
       <SoundToggle />
+      <ThemeToggle theme={boardTheme} onChange={setBoardThemeState} />
       <div className="flex flex-col h-screen [height:100dvh] lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-10">
         {/* 情報パネル（モバイル: 上部 / lg以上: 左サイド） */}
         <div className="flex flex-col shrink-0 lg:w-[22rem]">
@@ -409,6 +414,7 @@ export default function CpuGame() {
           onCellClick={handleCellClick}
           finished={isFinished}
           hintCell={hintCell}
+          theme={boardTheme}
         />
 
         <div className="lg:hidden px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">

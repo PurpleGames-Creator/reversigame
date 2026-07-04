@@ -1,0 +1,24 @@
+name: prewarm-render
+
+# オンライン対戦の開催(毎日21:00 JST)前にRender Freeを起こしておく。
+# 21:00の第一波がコールドスタート(最大50秒)にぶつからないようにするのが目的。
+# GitHubのcronは数分遅れることがあるため2回(20:45/20:55 JST)撃つ。
+on:
+  schedule:
+    - cron: '45 11 * * *' # 20:45 JST
+    - cron: '55 11 * * *' # 20:55 JST
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake Render (health check)
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 70 https://purple-reversi.onrender.com/health || true)
+            echo "try $i -> $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 20
+          done
+          exit 1

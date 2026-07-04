@@ -2,7 +2,27 @@ import { PIECE_WHITE, PIECE_PURPLE } from '../lib/constants';
 
 const PIECE_EMPTY = 0;
 
-export default function Board({ board, legalMoves, lastMove, onCellClick, finished, hintCell }) {
+// 盤面テーマ（枠・マス・罫線の色だけ差し替え。石やマーカーは共通）
+const THEMES = {
+  purple: {
+    frame: 'linear-gradient(160deg, #241a3d 0%, #1a1130 100%)',
+    cell: 'linear-gradient(160deg, #2f2450 0%, #271c44 100%)',
+    line: 'rgba(255,255,255,0.06)',
+  },
+  green: {
+    frame: 'linear-gradient(160deg, #12352a 0%, #0b241b 100%)',
+    cell: 'linear-gradient(160deg, #1e7a4a 0%, #166141 100%)',
+    line: 'rgba(0,0,0,0.28)',
+  },
+  wood: {
+    frame: 'linear-gradient(160deg, #4a2f1b 0%, #33200f 100%)',
+    cell: 'linear-gradient(160deg, #9c6b3d 0%, #855429 100%)',
+    line: 'rgba(50,28,10,0.55)',
+  },
+};
+
+export default function Board({ board, legalMoves, lastMove, onCellClick, finished, hintCell, theme = 'purple' }) {
+  const t = THEMES[theme] || THEMES.purple;
   const handleCellClick = (row, col) => {
     if (onCellClick && !board[row][col] && legalMoves.includes(`${row},${col}`)) {
       onCellClick(row, col);
@@ -30,7 +50,7 @@ export default function Board({ board, legalMoves, lastMove, onCellClick, finish
           // 高さの低い画面では74vhで頭打ちにしてはみ出しを防ぐ）
           maxWidth: 'min(92vw, 74vh, 560px)',
           aspectRatio: '1 / 1',
-          background: 'linear-gradient(160deg, #241a3d 0%, #1a1130 100%)',
+          background: t.frame,
           border: '1px solid rgba(255,255,255,0.10)',
           boxShadow:
             '0 30px 70px -24px rgba(10,2,30,0.8), inset 0 1px 0 rgba(255,255,255,0.06)',
@@ -41,7 +61,7 @@ export default function Board({ board, legalMoves, lastMove, onCellClick, finish
           style={{
             gridTemplateColumns: 'repeat(8, minmax(0, 1fr))',
             gap: '1px',
-            background: 'rgba(255,255,255,0.06)',
+            background: t.line,
           }}
         >
           {Array.from({ length: 8 }).map((_, row) =>
@@ -58,10 +78,7 @@ export default function Board({ board, legalMoves, lastMove, onCellClick, finish
                   disabled={!empty || !legal}
                   className="relative aspect-square focus:outline-none transition-colors"
                   style={{
-                    background:
-                      empty && legal
-                        ? 'rgba(139,92,246,0.14)'
-                        : 'linear-gradient(160deg, #2f2450 0%, #271c44 100%)',
+                    background: empty && legal ? 'rgba(139,92,246,0.2)' : t.cell,
                     cursor: empty && legal ? 'pointer' : 'default',
                   }}
                 >

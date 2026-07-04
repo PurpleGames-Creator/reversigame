@@ -49,6 +49,26 @@ export const markUltimateBeaten = () => {
   localStorage.setItem('ultimateBeaten', '1');
 };
 
+// 盤面テーマ（purple | green | wood）
+export const getBoardTheme = () => {
+  if (typeof window === 'undefined') {
+    return 'purple';
+  }
+  const t = localStorage.getItem('boardTheme');
+  return t === 'green' || t === 'wood' ? t : 'purple';
+};
+
+export const setBoardTheme = (theme) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    localStorage.setItem('boardTheme', theme);
+  } catch (e) {
+    /* ignore */
+  }
+};
+
 // CPU戦の難易度別戦績 { easy: {w,l,d}, normal: {...}, ... }
 export const getCpuRecords = () => {
   if (typeof window === 'undefined') {
