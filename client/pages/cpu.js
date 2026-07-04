@@ -171,10 +171,10 @@ export default function CpuGame() {
       leadSaidRef.current = false;
       behindSaidRef.current = false;
       setPhase('playing');
-      // 対局開始フラッシュ（1.4秒で自動消滅）
+      // 対局開始フラッシュ（1.6秒で自動消滅）
       setOpening({ key: Date.now() });
       if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
-      openingTimerRef.current = setTimeout(() => setOpening(null), 1450);
+      openingTimerRef.current = setTimeout(() => setOpening(null), 1650);
       say(GREETINGS[diff] || 'よろしくね♪');
     },
     [say]
@@ -420,7 +420,7 @@ export default function CpuGame() {
                 title={hintsLeft > 0 ? `ヒント（あと${hintsLeft}回）` : 'ヒントを使い切った'}
                 className="absolute right-4 top-1/2 -translate-y-1/2 btn btn-glass px-3 py-1 text-xs disabled:opacity-35 tabular-nums"
               >
-                💡×{hintsLeft}
+                ヒント×{hintsLeft}
               </button>
             )}
             {message ? (
@@ -470,21 +470,35 @@ export default function CpuGame() {
         </div>
 
 
-        {/* 対局開始フラッシュ */}
+        {/* 対局開始：白文字だけのフラッシュ演出 */}
         {opening && (
           <div key={opening.key} className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
-            <div className="open-flash glass-light rounded-2xl px-8 py-4 text-center">
-              <p className="wordmark text-xl text-gray-900">対局開始</p>
-              <p className="text-sm text-gray-500 mt-0.5">あなたは白（先手）</p>
-            </div>
+            <p className="battle-start wordmark text-4xl text-white">対局開始</p>
           </div>
         )}
 
+        {/* 勝利のクラッカー：時間差3連発の花火 */}
         {isFinished && winner === WHITE && (
-          <Confetti
-            colors={difficulty === 'ultimate' ? ['#fbbf24', '#fff8e1'] : undefined}
-            count={purpleCount === 0 ? 40 : 20}
-          />
+          <>
+            <Confetti
+              colors={difficulty === 'ultimate' ? ['#fbbf24', '#fff8e1'] : undefined}
+              count={purpleCount === 0 ? 32 : 22}
+              delay={900}
+              origin={{ x: 50, y: 44 }}
+            />
+            <Confetti
+              colors={difficulty === 'ultimate' ? ['#fbbf24', '#fff8e1'] : undefined}
+              count={purpleCount === 0 ? 32 : 22}
+              delay={1550}
+              origin={{ x: 26, y: 28 }}
+            />
+            <Confetti
+              colors={difficulty === 'ultimate' ? ['#fbbf24', '#fff8e1'] : undefined}
+              count={purpleCount === 0 ? 32 : 22}
+              delay={2200}
+              origin={{ x: 74, y: 32 }}
+            />
+          </>
         )}
 
         {/* リプレイ */}
@@ -498,12 +512,9 @@ export default function CpuGame() {
               <div className="flex justify-center -mt-16 mb-1">
                 <Papuko size={116} glow />
               </div>
-              <h2 className={`wordmark text-2xl text-gray-900 ${winner === 'draw' ? 'mb-1' : 'mb-5'}`}>
+              <h2 className="wordmark text-2xl text-gray-900 mb-5">
                 {winner === 'draw' ? '引き分け' : winner === WHITE ? 'あなたの勝ち' : 'パプ子の勝ち'}
               </h2>
-              {winner === 'draw' && (
-                <p className="text-gray-500 text-sm mb-5">いい勝負でした</p>
-              )}
 
               {justUnlocked && (
                 <div className="mb-5 rounded-xl bg-violet-50 border border-violet-200 px-4 py-2.5 text-sm font-semibold text-violet-700">

@@ -117,7 +117,7 @@ export default function GamePage() {
           data.player1?.id === socket.id ? 'あなたは白（先手）' : 'あなたは紫（後手）';
         setOpening({ key: Date.now(), text: mine });
         if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
-        openingTimerRef.current = setTimeout(() => setOpening(null), 1450);
+        openingTimerRef.current = setTimeout(() => setOpening(null), 1650);
       }
     };
     const handleBoardUpdated = (data) => {
@@ -536,26 +536,23 @@ export default function GamePage() {
         )}
 
 
-        {/* 対局開始フラッシュ（自分の色を明示） */}
+        {/* 対局開始：白文字だけのフラッシュ演出（自分の色を明示） */}
         {opening && (
-          <div key={opening.key} className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
-            <div className="open-flash glass-light rounded-2xl px-8 py-4 text-center">
-              <p className="wordmark text-xl text-gray-900">対局開始</p>
-              <p className="text-sm text-gray-500 mt-0.5">{opening.text}</p>
+          <div key={opening.key} className="fixed inset-0 z-40 flex flex-col items-center justify-center pointer-events-none">
+            <div className="battle-start text-center">
+              <p className="wordmark text-4xl text-white">対局開始</p>
+              <p className="text-sm text-white/85 mt-2">{opening.text}</p>
             </div>
           </div>
         )}
 
+        {/* 勝利のクラッカー：時間差3連発の花火 */}
         {isFinished && gameState.winner === socket.id && !isSpectator && (
-          <Confetti
-            count={
-              (gameState.winner === gameState.player1?.id
-                ? gameState.player2?.pieces
-                : gameState.player1?.pieces) === 0
-                ? 40
-                : 20
-            }
-          />
+          <>
+            <Confetti count={22} delay={900} origin={{ x: 50, y: 44 }} />
+            <Confetti count={22} delay={1550} origin={{ x: 26, y: 28 }} />
+            <Confetti count={22} delay={2200} origin={{ x: 74, y: 32 }} />
+          </>
         )}
 
         {/* リプレイ */}
