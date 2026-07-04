@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { initSocket } from '../lib/socket';
@@ -15,10 +15,43 @@ function LockIcon({ size = 18 }) {
   );
 }
 
+// 数値が変わったら現在の表示値からカウントアップ/ダウンして追いつくアニメーション
+function useCountUp(target, duration = 700) {
+  const [display, setDisplay] = useState(0);
+  const displayRef = useRef(0);
+  useEffect(() => {
+    if (displayRef.current === target) return;
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      displayRef.current = target;
+      setDisplay(target);
+      return;
+    }
+    const from = displayRef.current;
+    const t0 = performance.now();
+    let raf;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out
+      const val = Math.round(from + (target - from) * eased);
+      displayRef.current = val;
+      setDisplay(val);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return display;
+}
+
 export default function TitleScreen() {
   const router = useRouter();
   const [playerName, setLocalPlayerName] = useState('');
   const [onlineCount, setOnlineCount] = useState(0);
+  // サーバーは接続中の全クライアント数を配信するので、自分の1人分を引いて表示
+  const shownOnline = useCountUp(Math.max(0, onlineCount - 1));
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
   const [panel, setPanel] = useState(null); // null | 'random' | 'private'
@@ -263,8 +296,7 @@ export default function TitleScreen() {
           </h1>
           <p className="mt-2.5 text-[15px] text-white/70 flex items-center gap-2 animate-rise delay-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
-            {/* サーバーは接続中の全クライアント数を配信するので、自分の1人分を引く */}
-            {Math.max(0, onlineCount - 1)}人がオンライン
+            <span className="tabular-nums">{shownOnline}</span>人がオンライン
           </p>
           <p className="mt-1 mb-7 text-[11px] text-white/45 animate-rise delay-2">
             （あなたを除く）
