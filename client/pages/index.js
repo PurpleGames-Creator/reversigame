@@ -168,7 +168,9 @@ export default function TitleScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#2a0f4c]/75 backdrop-blur-sm">
           <div className="glass-light rounded-3xl p-6 max-w-sm w-full animate-rise">
             <h2 className="wordmark text-xl text-gray-900 mb-1 text-center">観戦する</h2>
-            <p className="text-sm text-gray-500 mb-4 text-center">見たい対戦を選んでください</p>
+            {liveGames.length > 0 && (
+              <p className="text-sm text-gray-500 mb-4 text-center">見たい対戦を選んでください</p>
+            )}
             <div className="space-y-2.5 max-h-[50vh] overflow-y-auto">
               {liveGames.length > 0 ? (
                 liveGames.map((g) => (
@@ -195,7 +197,7 @@ export default function TitleScreen() {
             </div>
             <button
               onClick={() => setSpectateOpen(false)}
-              className="btn w-full py-3 mt-4 bg-gray-100 text-gray-800 hover:bg-gray-200"
+              className="btn w-full py-3 mt-4 bg-white text-gray-700 font-semibold border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-400"
             >
               閉じる
             </button>
