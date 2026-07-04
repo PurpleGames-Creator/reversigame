@@ -361,6 +361,23 @@ export default function TitleScreen() {
       <Head><title>Purple Reversi</title></Head>
       <SoundToggle />
 
+      {/* Purple Park ロゴ（タップでホームページへ） */}
+      <a
+        href="https://purple-park.vercel.app/"
+        aria-label="Purple Park ホームページへ"
+        className="fixed z-40 transition-opacity hover:opacity-80 active:scale-95"
+        style={{
+          top: 'max(0.9rem, env(safe-area-inset-top))',
+          left: 'max(0.9rem, env(safe-area-inset-left))',
+        }}
+      >
+        <img
+          src={`${router.basePath}/park-logo.png`}
+          alt="Purple Park"
+          className="h-9 w-auto drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)]"
+        />
+      </a>
+
       {/* 観戦：進行中の対戦一覧。カードは固定高＝一覧が増減しても「閉じる」の位置が動かない */}
       {spectateOpen && (
         <div
