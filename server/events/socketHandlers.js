@@ -13,6 +13,13 @@ const { getLegalMoves } = require('../game/rules');
 // 対局中に切断したプレイヤーの復帰を待つ猶予時間
 const GRACE_MS = 30000;
 
+// オンライン対戦（ランダムマッチ）の開催時間: 毎日21:00〜24:00 JST
+// プライベート戦・観戦は対象外。クライアント側もロック表示するが、ここが最終ガード。
+const isOnlineHours = () => {
+  const jstHour = (new Date().getUTCHours() + 9) % 24;
+  return jstHour >= 21;
+};
+
 function registerSocketHandlers(io) {
   const roomManager = new RoomManager();
   const playerNames = new Map(); // socket.id -> name
@@ -264,6 +271,9 @@ function registerSocketHandlers(io) {
     // ---- find-match（ランダムマッチング） --------------------------------
     socket.on('find-match', (callback) => {
       try {
+        if (!isOnlineHours()) {
+          throw new Error('オンライン対戦は毎日21:00〜24:00に開催しています');
+        }
         const name = playerNames.get(socket.id);
         if (!name) throw new Error('Player not registered');
 

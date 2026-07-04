@@ -16,6 +16,35 @@ function LockIcon({ size = 18 }) {
   );
 }
 
+// オンライン対戦（ランダムマッチ）の開催時間: 毎日21:00〜24:00 JST
+const isOnlineHours = () => (new Date().getUTCHours() + 9) % 24 >= 21;
+// 次の開催（JST 21:00）までの残りミリ秒（開催中は0）
+const msUntilOpen = () => {
+  const jstNowMs = Date.now() + 9 * 3600e3;
+  const jstHour = Math.floor(jstNowMs / 3600e3) % 24;
+  if (jstHour >= 21) return 0;
+  const jstDayStart = Math.floor(jstNowMs / 86400e3) * 86400e3;
+  return jstDayStart + 21 * 3600e3 - jstNowMs;
+};
+
+// 開催までのカウントダウン（1秒ごと更新・H:MM:SS）
+function OpenCountdown() {
+  const [left, setLeft] = useState(msUntilOpen());
+  useEffect(() => {
+    const t = setInterval(() => setLeft(msUntilOpen()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const s = Math.max(0, Math.floor(left / 1000));
+  const h = Math.floor(s / 3600);
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  return (
+    <span className="font-bold text-violet-700 tabular-nums">
+      {h}:{m}:{sec}
+    </span>
+  );
+}
+
 // タイトルのパプ子をタップした時のセリフ（ツンデレ）
 const PAPUKO_TAP_LINES = [
   'な、なに？ 対戦したいの？',
@@ -96,6 +125,16 @@ export default function TitleScreen() {
   const matchTimersRef = useRef([]);
   const [spectateOpen, setSpectateOpen] = useState(false);
   const [liveGames, setLiveGames] = useState([]);
+  const [onlineOpen, setOnlineOpen] = useState(true); // 開催時間内か（初期はSSR差異回避でtrue）
+  const [hoursOpen, setHoursOpen] = useState(false); // 開催時間の案内ポップアップ
+
+  // 開催時間の判定を30秒ごとに更新（21:00をまたいだら自動でロック解除）
+  useEffect(() => {
+    const update = () => setOnlineOpen(isOnlineHours());
+    update();
+    const t = setInterval(update, 30000);
+    return () => clearInterval(t);
+  }, []);
   const [linkCopied, setLinkCopied] = useState(false);
   const socket = initSocket();
 
@@ -194,9 +233,13 @@ export default function TitleScreen() {
     }
   };
 
-  // ランダム対戦
+  // オンライン対戦（ランダムマッチ・毎日21:00〜24:00限定）
   const handleRandomMatch = () => {
     if (!playerName.trim() || loading || matching) return;
+    if (!isOnlineHours()) {
+      setHoursOpen(true);
+      return;
+    }
     setLoading(true);
     socket.emit('register', playerName.trim(), (res) => {
       if (res && res.success) {
@@ -205,7 +248,13 @@ export default function TitleScreen() {
         setMatchMode('random');
         setMatchPhase('searching');
         setMatching(true);
-        socket.emit('find-match');
+        // サーバー側の時間ガードに弾かれたら案内を出す（時計ズレ等の保険）
+        socket.emit('find-match', (res2) => {
+          if (res2 && res2.success === false) {
+            setMatching(false);
+            setHoursOpen(true);
+          }
+        });
       } else {
         setLoading(false);
       }
@@ -326,6 +375,36 @@ export default function TitleScreen() {
         </div>
       )}
 
+      {/* オンライン対戦の開催時間案内 */}
+      {hoursOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#2a0f4c]/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setHoursOpen(false);
+          }}
+        >
+          <div className="glass-light rounded-3xl p-7 max-w-xs w-full text-center animate-rise">
+            <p className="text-3xl mb-2">🌙</p>
+            <h2 className="wordmark text-xl text-gray-900 mb-2">オンライン対戦</h2>
+            <p className="text-sm text-gray-600 mb-1">
+              毎日 <span className="font-bold text-violet-700">21:00〜24:00</span> に開催中！
+            </p>
+            <p className="text-sm text-gray-500 mb-5">
+              開催まで あと <OpenCountdown />
+            </p>
+            <p className="text-xs text-gray-400 mb-5">
+              プライベート戦（あいことば）はいつでも遊べます
+            </p>
+            <button
+              onClick={() => setHoursOpen(false)}
+              className="btn w-full py-3 bg-white text-gray-700 font-semibold border-2 border-gray-300 hover:bg-gray-50 hover:border-gray-400"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* マッチング待機ポップアップ */}
       {matching && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#2a0f4c]/75 backdrop-blur-sm">
@@ -433,14 +512,27 @@ export default function TitleScreen() {
               パプ子と対戦
             </button>
 
-            {/* ランダム対戦（タップでトグル） */}
+            {/* オンライン対戦（毎日21:00〜24:00限定。時間外はロック表示） */}
             <button
-              onClick={() => setPanel(panel === 'random' ? null : 'random')}
-              className={`rounded-2xl flex items-center justify-center py-6 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-3 ${
-                panel === 'random' ? 'btn-violet' : 'btn-glass'
+              onClick={() =>
+                onlineOpen ? setPanel(panel === 'random' ? null : 'random') : setHoursOpen(true)
+              }
+              className={`rounded-2xl flex flex-col items-center justify-center py-4 text-[15px] font-semibold leading-tight transition-transform active:scale-[0.97] animate-rise delay-3 ${
+                !onlineOpen
+                  ? 'btn-glass opacity-55 grayscale'
+                  : panel === 'random'
+                    ? 'btn-violet'
+                    : 'btn-glass'
               }`}
             >
-              オンライン対戦
+              <span>{onlineOpen ? 'オンライン対戦' : '🌙 オンライン対戦'}</span>
+              <span
+                className={`text-[10px] font-medium mt-1 ${
+                  onlineOpen ? 'text-emerald-300' : 'opacity-80'
+                }`}
+              >
+                {onlineOpen ? '🟢 開催中' : '毎日21:00〜24:00'}
+              </span>
             </button>
 
             {/* プライベート戦（タップでトグル） */}
