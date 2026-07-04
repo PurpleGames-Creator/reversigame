@@ -404,7 +404,18 @@ export default function CpuGame() {
             currentPlayer={turn === WHITE ? YOU.id : CPU.id}
           />
 
-          <div className="text-center mt-3 h-8 flex items-center justify-center">
+          <div className="relative text-center mt-3 h-8 flex items-center justify-center">
+            {/* ヒント：ステータス行の右端に常駐（行が増減しないので盤面が動かない） */}
+            {(difficulty === 'easy' || difficulty === 'normal') && !isFinished && (
+              <button
+                onClick={handleHint}
+                disabled={!(phase === 'playing' && turn === WHITE && !thinking && hintsLeft > 0)}
+                title={hintsLeft > 0 ? `ヒント（あと${hintsLeft}回）` : 'ヒントを使い切った'}
+                className="absolute right-4 top-1/2 -translate-y-1/2 btn btn-glass px-3 py-1 text-xs disabled:opacity-35 tabular-nums"
+              >
+                💡×{hintsLeft}
+              </button>
+            )}
             {message ? (
               <span className="text-sm font-medium text-white/90 glass rounded-full px-4 py-1.5">
                 {message}
@@ -428,18 +439,6 @@ export default function CpuGame() {
             ) : null}
           </div>
 
-          {/* ヒント（よわい/ふつう限定・1局3回）。高さを常時確保してガタつきを防ぐ */}
-          {(difficulty === 'easy' || difficulty === 'normal') && !isFinished && (
-            <div className="text-center mt-2 h-8 flex items-center justify-center">
-              <button
-                onClick={handleHint}
-                disabled={!(phase === 'playing' && turn === WHITE && !thinking && hintsLeft > 0)}
-                className="btn btn-glass px-4 py-1.5 text-xs disabled:opacity-35"
-              >
-                💡 {hintsLeft > 0 ? `ヒント（あと${hintsLeft}回）` : 'ヒントを使い切った'}
-              </button>
-            </div>
-          )}
 
           <div className="hidden lg:block px-4 mt-8">
             <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
