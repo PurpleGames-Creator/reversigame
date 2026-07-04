@@ -146,10 +146,10 @@ export default function CpuGame() {
       setHintsLeft(3);
       setHintCell(null);
       setPhase('playing');
-      // 対局開始フラッシュ（2.6秒で自動消滅）
+      // 対局開始フラッシュ（4秒で自動消滅）
       setOpening({ key: Date.now() });
       if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
-      openingTimerRef.current = setTimeout(() => setOpening(null), 2650);
+      openingTimerRef.current = setTimeout(() => setOpening(null), 4050);
     },
     []
   );

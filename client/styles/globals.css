@@ -327,16 +327,16 @@ input {
   animation: urgentPulse 1s ease-in-out infinite;
 }
 
-/* 対局開始：白文字だけがブラー＋字間の広がりで現れて消える（2.6秒・読める長さを確保） */
+/* 対局開始：白文字が現れて約3秒静止（読める）→最後の0.6秒でフェードアウト（計4秒） */
 @keyframes battleStart {
-  0% { opacity: 0; transform: scale(0.72); letter-spacing: 0.04em; filter: blur(12px); }
-  13% { opacity: 1; transform: scale(1); letter-spacing: 0.14em; filter: blur(0); }
-  82% { opacity: 1; transform: scale(1.03); letter-spacing: 0.18em; }
-  100% { opacity: 0; transform: scale(1.2); letter-spacing: 0.4em; filter: blur(10px); }
+  0% { opacity: 0; transform: scale(0.8); letter-spacing: 0.06em; filter: blur(12px); }
+  8% { opacity: 1; transform: scale(1); letter-spacing: 0.14em; filter: blur(0); }
+  85% { opacity: 1; transform: scale(1); letter-spacing: 0.14em; filter: blur(0); }
+  100% { opacity: 0; transform: scale(1.15); letter-spacing: 0.3em; filter: blur(10px); }
 }
 .battle-start {
   /* both: animation-delay 中は初期状態(透明)を保つ（コイントス後に出す用） */
-  animation: battleStart 2.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: battleStart 4s cubic-bezier(0.22, 1, 0.36, 1) both;
   text-shadow:
     0 0 24px rgba(167, 139, 250, 0.85),
     0 0 64px rgba(139, 92, 246, 0.5);

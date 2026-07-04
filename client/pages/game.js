@@ -127,7 +127,7 @@ export default function GamePage() {
           coin: isRematch ? null : myColor,
         });
         if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
-        openingTimerRef.current = setTimeout(() => setOpening(null), isRematch ? 2650 : 4200);
+        openingTimerRef.current = setTimeout(() => setOpening(null), isRematch ? 4050 : 5500);
       }
     };
     const handleBoardUpdated = (data) => {
