@@ -342,6 +342,15 @@ input {
     0 0 64px rgba(139, 92, 246, 0.5);
 }
 
+/* 開場（21:00）の瞬間：オンライン対戦ボタンが数秒光る */
+@keyframes openGlow {
+  0%, 100% { box-shadow: 0 0 0 rgba(52, 211, 153, 0); }
+  50% { box-shadow: 0 0 26px rgba(52, 211, 153, 0.85), 0 0 60px rgba(52, 211, 153, 0.35); }
+}
+.open-glow {
+  animation: openGlow 1.3s ease-in-out 3;
+}
+
 /* コイントス：石が回転して自分の色で着地（白=偶数回転 / 紫=+半回転） */
 .coin-stage {
   perspective: 700px;

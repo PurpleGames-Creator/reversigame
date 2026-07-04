@@ -52,13 +52,20 @@ function ClosingNotice() {
   );
 }
 
-// 開催までのカウントダウン（1秒ごと更新・H:MM:SS）
-function OpenCountdown() {
+// 開催までのカウントダウン（1秒ごと更新・H:MM:SS）。0になったら onZero を一度だけ呼ぶ
+function OpenCountdown({ onZero }) {
   const [left, setLeft] = useState(msUntilOpen());
+  const firedRef = useRef(false);
   useEffect(() => {
     const t = setInterval(() => setLeft(msUntilOpen()), 1000);
     return () => clearInterval(t);
   }, []);
+  useEffect(() => {
+    if (left <= 0 && !firedRef.current) {
+      firedRef.current = true;
+      if (onZero) onZero();
+    }
+  }, [left, onZero]);
   const s = Math.max(0, Math.floor(left / 1000));
   const h = Math.floor(s / 3600);
   const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
@@ -154,19 +161,35 @@ export default function TitleScreen() {
   const [hoursOpen, setHoursOpen] = useState(false); // 開催時間の案内ポップアップ
   const [champion, setChampion] = useState(null); // 夜間王者 {name, wins}
 
-  // 開催時間の判定を30秒ごとに更新（21:00をまたいだら自動でロック解除）
-  // 21:00に開いたら前夜の王者表示をクリア（新しい夜の集計が始まる）
+  const [justOpened, setJustOpened] = useState(false); // 開場直後のボタン光り演出
+
+  // 開催時間の判定を1秒ごとに更新（21:00ちょうどに自動でロック解除）
+  // 開場の瞬間: 前夜の王者表示をクリア＋案内ポップアップを閉じ＋ボタンを数秒光らせる
   const prevOpenRef = useRef(false);
+  const mountedRef = useRef(false);
   useEffect(() => {
+    let glowTimer;
     const update = () => {
       const open = isOnlineHours();
-      if (open && !prevOpenRef.current) setChampion(null);
+      if (open && !prevOpenRef.current) {
+        setChampion(null);
+        setHoursOpen(false);
+        // 初回マウント時（もともと開催中）は光らせない。21:00をまたいだ時だけ
+        if (prevOpenRef.current === false && mountedRef.current) {
+          setJustOpened(true);
+          glowTimer = setTimeout(() => setJustOpened(false), 4000);
+        }
+      }
       prevOpenRef.current = open;
+      mountedRef.current = true;
       setOnlineOpen(open);
     };
     update();
-    const t = setInterval(update, 30000);
-    return () => clearInterval(t);
+    const t = setInterval(update, 1000);
+    return () => {
+      clearInterval(t);
+      if (glowTimer) clearTimeout(glowTimer);
+    };
   }, []);
   const [linkCopied, setLinkCopied] = useState(false);
   const socket = initSocket();
@@ -428,7 +451,7 @@ export default function TitleScreen() {
               毎日 <span className="font-bold text-violet-700">21:00〜24:00</span> に開催中！
             </p>
             <p className="text-sm text-gray-500 mb-5">
-              開催まで あと <OpenCountdown />
+              開催まで あと <OpenCountdown onZero={() => setHoursOpen(false)} />
             </p>
             <p className="text-xs text-gray-400 mb-5">
               プライベート戦（あいことば）はいつでも遊べます
@@ -571,7 +594,7 @@ export default function TitleScreen() {
                   : panel === 'random'
                     ? 'btn-violet'
                     : 'btn-glass'
-              }`}
+              } ${justOpened ? 'open-glow' : ''}`}
             >
               <span>{onlineOpen ? 'オンライン対戦' : '🌙 オンライン対戦'}</span>
               <span
