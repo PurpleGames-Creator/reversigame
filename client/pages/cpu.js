@@ -24,11 +24,11 @@ const YOU = { id: 'you', name: 'あなた' };
 const CPU = { id: 'papuko', name: 'パプ子' };
 
 const DIFFICULTIES = [
-  { key: 'easy', label: 'よわい', desc: '手加減してくれてもいいよ', dot: '#34d399' },
-  { key: 'normal', label: 'ふつう', desc: '油断したら知らないからね', dot: '#a78bfa' },
-  { key: 'hard', label: 'つよい', desc: '強いよ、私', dot: '#fbbf24' },
+  { key: 'easy', label: 'よわい', desc: '手加減してくれてもいいよ', dot: '#38bdf8' },
+  { key: 'normal', label: 'ふつう', desc: '油断したら知らないからね', dot: '#fbbf24' },
+  { key: 'hard', label: 'つよい', desc: '強いよ、私', dot: '#ef4444' },
   // 究極は「つよい」に勝つまでロック（解放状態は localStorage）
-  { key: 'ultimate', label: '究極', desc: 'もう誰もついてこれない', dot: '#f43f5e', gated: true },
+  { key: 'ultimate', label: '究極', desc: 'もう誰もついてこれない', dot: '#a78bfa', gated: true },
 ];
 
 // 人間 = 白(先手), パプ子 = 紫(後手)
