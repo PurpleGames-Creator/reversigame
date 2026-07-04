@@ -111,6 +111,18 @@ class RoomManager {
     if (room.game) {
       room.game.clearTurnTimeout();
     }
+    // 再戦は先手交代：host(白/先手)とguestを入れ替える。
+    // 通算成績はhost/guestキーなので、入れ替えに合わせてカウントも追従させる。
+    const prevHost = room.host;
+    room.host = room.guest;
+    room.guest = prevHost;
+    if (room.series) {
+      room.series = {
+        host: room.series.guest,
+        guest: room.series.host,
+        draw: room.series.draw,
+      };
+    }
     room.game = new ReversiGame(room.host, room.guest);
     room.status = 'playing';
     room.seriesCounted = false;

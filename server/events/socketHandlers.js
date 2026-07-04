@@ -16,6 +16,8 @@ const GRACE_MS = 30000;
 // オンライン対戦（ランダムマッチ）の開催時間: 毎日21:00〜24:00 JST
 // プライベート戦・観戦は対象外。クライアント側もロック表示するが、ここが最終ガード。
 const isOnlineHours = () => {
+  // ローカル開発・E2E用の常時開放スイッチ（本番Renderでは未設定）
+  if (process.env.ONLINE_HOURS_ALWAYS === '1') return true;
   const jstHour = (new Date().getUTCHours() + 9) % 24;
   return jstHour >= 21;
 };
@@ -291,15 +293,18 @@ function registerSocketHandlers(io) {
         }
 
         if (opponentId) {
-          // 待っていた方を host(先手/白)、来た方を guest にして対局開始
+          // コイントス：先手(白)=host をランダムに決める
           const oppName = playerNames.get(opponentId) || 'Player';
           const oppSocket = io.sockets.sockets.get(opponentId);
-          const roomId = roomManager.createRoom(opponentId, oppName, tokenOf(oppSocket));
-          if (oppSocket) oppSocket.join(roomId);
-          const room = roomManager.joinRoom(roomId, socket.id, name, tokenOf(socket));
-          socket.join(roomId);
+          const waiter = { id: opponentId, name: oppName, sock: oppSocket };
+          const comer = { id: socket.id, name, sock: socket };
+          const [hostP, guestP] = Math.random() < 0.5 ? [waiter, comer] : [comer, waiter];
+          const roomId = roomManager.createRoom(hostP.id, hostP.name, tokenOf(hostP.sock));
+          if (hostP.sock) hostP.sock.join(roomId);
+          const room = roomManager.joinRoom(roomId, guestP.id, guestP.name, tokenOf(guestP.sock));
+          if (guestP.sock) guestP.sock.join(roomId);
           room.lastMove = null;
-          console.log(`Matched: ${oppName} vs ${name} (${roomId})`);
+          console.log(`Matched: ${hostP.name}(白) vs ${guestP.name} (${roomId})`);
 
           io.to(roomId).emit('matched', { roomId });
           startGame(room);
@@ -338,17 +343,19 @@ function registerSocketHandlers(io) {
 
         const waiterId = privateWaiting.get(code);
         if (waiterId && waiterId !== socket.id && io.sockets.sockets.get(waiterId)) {
-          // 同じ合言葉の相手が居た → その2人で対局開始
+          // 同じ合言葉の相手が居た → その2人で対局開始（コイントス：先手はランダム）
           privateWaiting.delete(code);
           const oppName = playerNames.get(waiterId) || 'Player';
           const oppSocket = io.sockets.sockets.get(waiterId);
-          // 先に待っていた方=host(白/先手)
-          const roomId = roomManager.createRoom(waiterId, oppName, tokenOf(oppSocket));
-          if (oppSocket) oppSocket.join(roomId);
-          const room = roomManager.joinRoom(roomId, socket.id, name, tokenOf(socket));
-          socket.join(roomId);
+          const waiter = { id: waiterId, name: oppName, sock: oppSocket };
+          const comer = { id: socket.id, name, sock: socket };
+          const [hostP, guestP] = Math.random() < 0.5 ? [waiter, comer] : [comer, waiter];
+          const roomId = roomManager.createRoom(hostP.id, hostP.name, tokenOf(hostP.sock));
+          if (hostP.sock) hostP.sock.join(roomId);
+          const room = roomManager.joinRoom(roomId, guestP.id, guestP.name, tokenOf(guestP.sock));
+          if (guestP.sock) guestP.sock.join(roomId);
           room.lastMove = null;
-          console.log(`Private matched (${code}): ${oppName} vs ${name} (${roomId})`);
+          console.log(`Private matched (${code}): ${hostP.name}(白) vs ${guestP.name} (${roomId})`);
 
           io.to(roomId).emit('matched', { roomId });
           startGame(room);

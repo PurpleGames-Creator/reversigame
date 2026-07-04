@@ -64,6 +64,7 @@ export default function GamePage() {
   const noticeTimerRef = useRef(null);
   const bubbleTimersRef = useRef({});
   const openingTimerRef = useRef(null);
+  const startedOnceRef = useRef(false); // 初戦(コイントス)か再戦(先手交代)かの判別
 
   const socket = initSocket();
 
@@ -106,13 +107,20 @@ export default function GamePage() {
       setSpectatorCount(data.spectatorCount ?? 0);
       syncDeadline(data);
       setLoading(false);
-      // 対局開始フラッシュ（自分の色を明示。観戦者には出さない）
+      // 対局開始演出（観戦者には出さない）
+      // 初戦: コイントスで先手を発表 → 対局開始フラッシュ / 再戦: 先手交代の告知のみ
       if (!isSpectator) {
-        const mine =
-          data.player1?.id === socket.id ? 'あなたは白（先手）' : 'あなたは紫（後手）';
-        setOpening({ key: Date.now(), text: mine });
+        const isRematch = startedOnceRef.current;
+        startedOnceRef.current = true;
+        const myColor = data.player1?.id === socket.id ? 'white' : 'purple';
+        const mine = myColor === 'white' ? 'あなたは白（先手）' : 'あなたは紫（後手）';
+        setOpening({
+          key: Date.now(),
+          text: isRematch ? `先手交代！ ${mine}` : mine,
+          coin: isRematch ? null : myColor,
+        });
         if (openingTimerRef.current) clearTimeout(openingTimerRef.current);
-        openingTimerRef.current = setTimeout(() => setOpening(null), 2650);
+        openingTimerRef.current = setTimeout(() => setOpening(null), isRematch ? 2650 : 4200);
       }
     };
     const handleBoardUpdated = (data) => {
@@ -529,10 +537,21 @@ export default function GamePage() {
         )}
 
 
-        {/* 対局開始：白文字だけのフラッシュ演出（自分の色を明示） */}
+        {/* 対局開始演出：初戦はコイントス→フラッシュ、再戦は先手交代フラッシュのみ */}
         {opening && (
           <div key={opening.key} className="fixed inset-0 z-40 flex flex-col items-center justify-center pointer-events-none">
-            <div className="battle-start text-center">
+            {opening.coin && (
+              <div className="coin-stage">
+                <div className={`coin-toss ${opening.coin === 'white' ? 'coin-white' : 'coin-purple'}`}>
+                  <div className="coin-face coin-face-white" />
+                  <div className="coin-face coin-face-purple" />
+                </div>
+              </div>
+            )}
+            <div
+              className="battle-start text-center"
+              style={opening.coin ? { animationDelay: '1.4s' } : undefined}
+            >
               <p className="wordmark text-4xl text-white">対局開始</p>
               <p className="text-sm text-white/85 mt-2">{opening.text}</p>
             </div>
