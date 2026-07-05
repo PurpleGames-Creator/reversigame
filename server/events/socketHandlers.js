@@ -1,5 +1,6 @@
 const RoomManager = require('../managers/RoomManager');
 const { getLegalMoves } = require('../game/rules');
+const { logMatch } = require('../lib/matchLog');
 
 /**
  * Socket.io イベントハンドラ登録
@@ -137,6 +138,13 @@ function registerSocketHandlers(io) {
     }
     room.series[key] += 1;
     room.seriesCounted = true;
+
+    // 対局数を記録（週次レポート用の件数のみ。seriesCounted ガード内なので1対局1回）
+    // mode 未設定 = 部屋作成(create-room/join-room)経由の対局
+    logMatch(
+      room.mode || 'room',
+      room.resignWinnerId ? 'resign' : key === 'draw' ? 'draw' : 'normal'
+    );
 
     // 夜間王者の集計はオンライン対戦(random)のみ対象（プライベート戦は友達遊びなので除外）
     if (room.mode === 'random') {

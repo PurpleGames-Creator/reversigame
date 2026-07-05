@@ -21,6 +21,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import CountUp from '../components/CountUp';
 import { chooseMove } from '../lib/ai';
 import { playPlace, playFlips, unlockAudio } from '../lib/sound';
+import { logCpuMatch } from '../lib/matchLog';
 import {
   isUltimateUnlocked,
   unlockUltimate,
@@ -185,6 +186,8 @@ export default function CpuGame() {
       bumpCpuStreak(difficulty, status.winner === WHITE);
       setRecords(getCpuRecords());
       setStreaks(getCpuStreaks());
+      // 対局数を記録（phase が finished に変わるのでこのブロックは1対局1回）
+      logCpuMatch(difficulty);
       // 「つよい」に勝ったら究極を解放
       if (status.winner === WHITE && difficulty === 'hard' && !ultimateUnlocked) {
         unlockUltimate();
