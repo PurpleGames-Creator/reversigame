@@ -65,6 +65,7 @@ export default function CpuGame() {
   const [hintCell, setHintCell] = useState(null);
   const [streaks, setStreaks] = useState({});
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key}
+  const [resultHidden, setResultHidden] = useState(false); // 結果ポップアップを隠して最終盤面を見ている
   const [boardTheme, setBoardThemeState] = useState('green');
 
   const openingTimerRef = useRef(null);
@@ -146,6 +147,7 @@ export default function CpuGame() {
       setMessage(null);
       setHintsLeft(3);
       setHintCell(null);
+      setResultHidden(false);
       setPhase('playing');
       // 対局開始フラッシュ（4秒で自動消滅）
       setOpening({ key: Date.now() });
@@ -403,7 +405,12 @@ export default function CpuGame() {
           </div>
 
 
-          <div className="hidden lg:block px-4 mt-8">
+          <div className="hidden lg:block px-4 mt-8 space-y-2.5">
+            {isFinished && resultHidden && (
+              <button onClick={() => setResultHidden(false)} className="btn btn-violet w-full py-3.5">
+                結果を表示
+              </button>
+            )}
             <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
               対局をやめる
             </button>
@@ -420,7 +427,12 @@ export default function CpuGame() {
           theme={boardTheme}
         />
 
-        <div className="lg:hidden px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))]">
+        <div className="lg:hidden px-4 pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+0.75rem))] space-y-2.5">
+          {isFinished && resultHidden && (
+            <button onClick={() => setResultHidden(false)} className="btn btn-violet w-full py-3.5">
+              結果を表示
+            </button>
+          )}
           <button onClick={backToSelect} className="btn btn-glass w-full py-3.5">
             対局をやめる
           </button>
@@ -459,7 +471,7 @@ export default function CpuGame() {
         )}
 
 
-        {isFinished && (
+        {isFinished && !resultHidden && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
             <div className="finish-card glass-light rounded-3xl p-7 max-w-sm w-full text-center">
               <div className="flex justify-center -mt-16 mb-1">
@@ -514,6 +526,12 @@ export default function CpuGame() {
                 </button>
                 <button onClick={() => router.push('/')} className="btn w-full py-2 text-violet-600 hover:opacity-70">
                   タイトルへ
+                </button>
+                <button
+                  onClick={() => setResultHidden(true)}
+                  className="btn w-full py-2 text-violet-600 hover:opacity-70"
+                >
+                  最終盤面を見る
                 </button>
               </div>
             </div>

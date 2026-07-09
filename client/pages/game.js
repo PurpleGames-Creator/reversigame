@@ -58,6 +58,7 @@ export default function GamePage() {
   const [graceUntil, setGraceUntil] = useState(null); // 相手の復帰待ち締切
   const [graceName, setGraceName] = useState(null); // 復帰待ちのプレイヤー名
   const [opponentGone, setOpponentGone] = useState(false); // 相手が完全に退出済み
+  const [resultHidden, setResultHidden] = useState(false); // 結果ポップアップを隠して最終盤面を見ている
   const [spectatorCount, setSpectatorCount] = useState(0); // 観戦者数
   const [bubbles, setBubbles] = useState({}); // スタンプ吹き出し {playerId: {text, key}}
   const [opening, setOpening] = useState(null); // 対局開始フラッシュ {key, text}
@@ -111,6 +112,7 @@ export default function GamePage() {
       setNotice(null);
       setGraceUntil(null);
       setOpponentGone(false);
+      setResultHidden(false);
       setSpectatorCount(data.spectatorCount ?? 0);
       syncDeadline(data);
       setLoading(false);
@@ -166,6 +168,7 @@ export default function GamePage() {
       }));
       setDeadline(null);
       setGraceUntil(null);
+      setResultHidden(false);
     };
     const handleOpponentDisconnected = () => {
       setError(isSpectator ? 'この対戦は終了しました' : '相手が退出しました');
@@ -421,19 +424,28 @@ export default function GamePage() {
 
 
   // 操作ボタン（モバイルは盤の下・PC横並び時は左パネル内に表示）
-  const actionButtons = isSpectator ? (
-    <button onClick={handleExitSpectate} className="btn btn-glass w-full py-3.5">
-      観戦をやめる
-    </button>
-  ) : isPlaying ? (
-    <button onClick={handleResign} disabled={loading} className="btn btn-glass w-full py-3.5">
-      投了する
-    </button>
-  ) : isFinished ? (
-    <button onClick={handleLeaveRoom} className="btn btn-primary w-full py-3.5">
-      タイトルに戻る
-    </button>
-  ) : null;
+  const actionButtons = (
+    <div className="space-y-2.5">
+      {isFinished && resultHidden && (
+        <button onClick={() => setResultHidden(false)} className="btn btn-violet w-full py-3.5">
+          結果を表示
+        </button>
+      )}
+      {isSpectator ? (
+        <button onClick={handleExitSpectate} className="btn btn-glass w-full py-3.5">
+          観戦をやめる
+        </button>
+      ) : isPlaying ? (
+        <button onClick={handleResign} disabled={loading} className="btn btn-glass w-full py-3.5">
+          投了する
+        </button>
+      ) : isFinished ? (
+        <button onClick={handleLeaveRoom} className="btn btn-primary w-full py-3.5">
+          タイトルに戻る
+        </button>
+      ) : null}
+    </div>
+  );
 
   return (
     <>
@@ -600,7 +612,7 @@ export default function GamePage() {
         )}
 
 
-        {isFinished && (
+        {isFinished && !resultHidden && (
           <div className="finish-overlay fixed inset-0 bg-black/55 backdrop-blur-sm flex items-center justify-center z-50 p-6">
             <div className="finish-card glass-light rounded-3xl p-7 max-w-sm w-full text-center">
               <h2 className="wordmark text-2xl text-gray-900 mb-4">対局終了</h2>
@@ -636,14 +648,18 @@ export default function GamePage() {
                 )}
 
               <div className="flex justify-center gap-10 mb-6">
-                <div>
-                  <p className="text-xs text-gray-400">白</p>
+                <div className="min-w-0 max-w-[9rem]">
+                  <p className="text-xs text-gray-400 truncate">
+                    {gameState.player1?.name || 'プレイヤー1'}（白）
+                  </p>
                   <p className="text-3xl font-bold text-gray-900 tabular-nums">
                     <CountUp value={gameState.player1?.pieces || 0} />
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-400">紫</p>
+                <div className="min-w-0 max-w-[9rem]">
+                  <p className="text-xs text-gray-400 truncate">
+                    {gameState.player2?.name || 'プレイヤー2'}（紫）
+                  </p>
                   <p className="text-3xl font-bold text-violet-600 tabular-nums">
                     <CountUp value={gameState.player2?.pieces || 0} />
                   </p>
@@ -688,6 +704,12 @@ export default function GamePage() {
                     タイトルに戻る
                   </button>
                 )}
+                <button
+                  onClick={() => setResultHidden(true)}
+                  className="btn w-full py-2 text-violet-600 hover:opacity-70"
+                >
+                  最終盤面を見る
+                </button>
               </div>
             </div>
           </div>
