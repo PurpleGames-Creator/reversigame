@@ -40,7 +40,7 @@ const handlersApi = registerSocketHandlers(io);
 
 // Routes
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', node: process.version });
+  res.json({ status: 'ok' });
 });
 
 // 現在の接続人数（Purple Park HPの「現在〇人がオンライン」表示用）
